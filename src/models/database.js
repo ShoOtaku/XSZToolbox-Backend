@@ -152,27 +152,68 @@ class DatabaseManager {
       }
     }
 
-    // 迁移 admins 表：添加 username 和 password_hash 列
+    // 迁移 admins 表：重建表以移除 cid_hash 的 NOT NULL 约束
     try {
-      this.db.exec('ALTER TABLE admins ADD COLUMN username TEXT');
-      console.log('  ✅ admins 表已添加 username 列');
-    } catch (error) {
-      if (error.message.includes('duplicate column')) {
-        console.log('  ℹ️ admins.username 列已存在');
-      } else {
-        console.log('  ⚠️ admins.username 迁移失败:', error.message);
-      }
-    }
+      // 检查旧表结构是否需要重建
+      const tableInfo = this.db.pragma('table_info(admins)');
+      const cidHashColumn = tableInfo.find(col => col.name === 'cid_hash');
 
-    try {
-      this.db.exec('ALTER TABLE admins ADD COLUMN password_hash TEXT');
-      console.log('  ✅ admins 表已添加 password_hash 列');
-    } catch (error) {
-      if (error.message.includes('duplicate column')) {
-        console.log('  ℹ️ admins.password_hash 列已存在');
+      if (cidHashColumn && cidHashColumn.notnull === 1) {
+        console.log('  🔄 检测到 cid_hash 有 NOT NULL 约束，正在重建 admins 表...');
+
+        // 事务中重建表
+        this.db.exec(`
+          BEGIN TRANSACTION;
+
+          -- 创建新表（cid_hash 可为空）
+          CREATE TABLE admins_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            password_hash TEXT,
+            cid_hash TEXT,
+            role TEXT DEFAULT 'admin',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+
+          -- 复制数据
+          INSERT INTO admins_new (id, cid_hash, role, created_at)
+          SELECT id, cid_hash, role, created_at FROM admins;
+
+          -- 删除旧表
+          DROP TABLE admins;
+
+          -- 重命名新表
+          ALTER TABLE admins_new RENAME TO admins;
+
+          COMMIT;
+        `);
+
+        console.log('  ✅ admins 表已重建，cid_hash 约束已移除');
       } else {
-        console.log('  ⚠️ admins.password_hash 迁移失败:', error.message);
+        console.log('  ℹ️ admins 表结构无需重建');
       }
+
+      // 添加 username 和 password_hash 列（如果不存在）
+      try {
+        this.db.exec('ALTER TABLE admins ADD COLUMN username TEXT');
+        console.log('  ✅ admins 表已添加 username 列');
+      } catch (error) {
+        if (error.message.includes('duplicate column')) {
+          console.log('  ℹ️ admins.username 列已存在');
+        }
+      }
+
+      try {
+        this.db.exec('ALTER TABLE admins ADD COLUMN password_hash TEXT');
+        console.log('  ✅ admins 表已添加 password_hash 列');
+      } catch (error) {
+        if (error.message.includes('duplicate column')) {
+          console.log('  ℹ️ admins.password_hash 列已存在');
+        }
+      }
+
+    } catch (error) {
+      console.log('  ⚠️ admins 表迁移失败:', error.message);
     }
 
     console.log('✅ 数据库迁移完成');
