@@ -51,6 +51,15 @@ class App {
         document.getElementById('addWhitelistBtn')?.addEventListener('click', () => this.showAddWhitelistForm());
         document.getElementById('submitWhitelistBtn')?.addEventListener('click', () => this.handleAddWhitelist());
         document.getElementById('cancelWhitelistBtn')?.addEventListener('click', () => this.hideAddWhitelistForm());
+        document.getElementById('whitelistTable')?.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const deleteBtn = target.closest('.whitelist-delete-btn');
+            if (!deleteBtn) return;
+
+            const cidHash = deleteBtn.dataset.cidHash;
+            this.handleRemoveWhitelist(cidHash);
+        });
 
         // 日志过滤
         document.getElementById('logActionFilter')?.addEventListener('change', () => this.loadLogs());
@@ -294,7 +303,7 @@ class App {
                 <td>${entry.added_by || '-'}</td>
                 <td>
                     ${canDelete
-                        ? `<button class="btn btn-danger btn-sm" onclick="app.handleRemoveWhitelist('${cidHash}')">删除</button>`
+                        ? `<button class="btn btn-danger btn-sm whitelist-delete-btn" data-cid-hash="${cidHash}">删除</button>`
                         : '<span style="color:#999;">无法删除</span>'}
                 </td>
             </tr>
