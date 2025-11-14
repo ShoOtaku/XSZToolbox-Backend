@@ -30,8 +30,9 @@ async function fixWhitelistHashes() {
     console.log('🔧 开始修复白名单哈希值');
     console.log('========================================\n');
 
-    // 获取数据库实例
-    const db = dbManager.getDb();
+    // 初始化数据库连接
+    console.log('📡 正在连接数据库...\n');
+    const db = dbManager.connect();
 
     // 查询所有有明文 CID 的白名单记录
     const query = `
@@ -144,6 +145,12 @@ async function fixWhitelistHashes() {
     console.error('\n❌ 修复过程发生错误:');
     console.error(error);
     process.exit(1);
+  } finally {
+    // 关闭数据库连接
+    if (dbManager.db) {
+      dbManager.db.close();
+      console.log('\n📡 数据库连接已关闭');
+    }
   }
 }
 
