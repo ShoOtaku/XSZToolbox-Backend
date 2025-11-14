@@ -297,6 +297,11 @@ async function getUsers(req, res) {
     const users = userModel.getAllUsers(parseInt(limit), parseInt(offset));
     const total = userModel.getUserCount();
 
+    // 调试日志：检查 qq_info 字段
+    if (users.length > 0) {
+      logger.debug(`第一个用户数据: CID=${users[0].cid}, QQ=${users[0].qq_info}, 角色=${users[0].character_name}`);
+    }
+
     logger.info(`✅ 用户列表查询成功: ${users.length} 条记录`);
 
     res.json({

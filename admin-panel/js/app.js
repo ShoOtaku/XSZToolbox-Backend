@@ -417,17 +417,35 @@ class App {
             return;
         }
 
-        const html = users.map(user => `
+        // 调试日志：检查返回的用户数据
+        console.log('用户列表数据:', users);
+        console.log('第一个用户的 qq_info:', users[0]?.qq_info);
+
+        const html = users.map(user => {
+            // 格式化 QQ 号显示
+            let qqDisplay = '-';
+            if (user.qq_info) {
+                // 如果包含多个QQ号（用 + 分隔），进行格式化
+                if (user.qq_info.includes('+')) {
+                    const qqList = user.qq_info.split('+').map(qq => qq.trim()).filter(qq => qq);
+                    qqDisplay = `<div class="qq-list" title="${user.qq_info}">${qqList.join(' + ')}</div>`;
+                } else {
+                    qqDisplay = user.qq_info;
+                }
+            }
+
+            return `
             <tr>
                 <td>${user.cid || '<span style="color:#999;">未记录</span>'}</td>
                 <td>${user.character_name || '-'}</td>
                 <td>${user.world_name || '-'}</td>
-                <td>${user.qq_info || '-'}</td>
+                <td class="qq-cell">${qqDisplay}</td>
                 <td>${this.formatDate(user.first_login)}</td>
                 <td>${this.formatDate(user.last_login)}</td>
                 <td>${user.login_count || 0}</td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
 
         tbody.innerHTML = html;
     }
@@ -542,5 +560,6 @@ class App {
     }
 }
 
-// 初始化应用
+// 初始化应用并暴露到全局，方便内联事件处理访问
 const app = new App();
+window.app = app;

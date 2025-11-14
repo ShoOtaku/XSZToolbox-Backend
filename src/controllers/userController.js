@@ -53,6 +53,11 @@ async function submitUserData(req, res) {
     const db = dbManager.getDb();
     const userModel = new UserModel(db);
 
+    // 调试日志：记录 QQ 信息
+    if (qqInfo) {
+      logger.debug(`收到 QQ 信息: ${qqInfo} (${characterName})`);
+    }
+
     // 创建或更新用户数据
     const result = userModel.upsertUser({
       cid: plainCid || null,
@@ -62,7 +67,7 @@ async function submitUserData(req, res) {
       qqInfo: qqInfo || null
     });
 
-    logger.info(`✅ 用户数据提交成功: ${characterName}@${worldName} - ${result.status}${plainCid ? ` (CID: ${plainCid})` : ''}`);
+    logger.info(`✅ 用户数据提交成功: ${characterName}@${worldName} - ${result.status}${plainCid ? ` (CID: ${plainCid})` : ''}${qqInfo ? ` (QQ: ${qqInfo})` : ''}`);
 
     res.json({
       success: true,

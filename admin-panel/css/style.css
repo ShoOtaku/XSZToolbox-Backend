@@ -501,6 +501,26 @@ body {
     display: block;
 }
 
+/* ==================== QQ列样式 ==================== */
+.qq-cell {
+    min-width: 150px;
+    max-width: 250px;
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+.qq-list {
+    line-height: 1.6;
+    color: var(--text-color);
+    font-size: 14px;
+    padding: 4px 0;
+}
+
+.qq-list:hover {
+    color: var(--primary-color);
+    cursor: help;
+}
+
 /* ==================== 响应式设计 ==================== */
 @media (max-width: 768px) {
     .sidebar {
