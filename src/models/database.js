@@ -103,6 +103,9 @@ class DatabaseManager {
       );
     `);
 
+    // 数据库迁移：为现有表添加新列（如果不存在）
+    this.migrateDatabase();
+
     // 创建索引提高查询性能
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_users_cid ON users(cid);
@@ -117,6 +120,62 @@ class DatabaseManager {
     `);
 
     console.log('✅ 数据库表结构已初始化');
+  }
+
+  /**
+   * 数据库迁移 - 为现有表添加新列
+   */
+  migrateDatabase() {
+    console.log('🔄 正在检查数据库迁移...');
+
+    // 迁移 users 表：添加 cid 列
+    try {
+      this.db.exec('ALTER TABLE users ADD COLUMN cid TEXT');
+      console.log('  ✅ users 表已添加 cid 列');
+    } catch (error) {
+      if (error.message.includes('duplicate column')) {
+        console.log('  ℹ️ users.cid 列已存在');
+      } else {
+        console.log('  ⚠️ users 表迁移失败:', error.message);
+      }
+    }
+
+    // 迁移 whitelist 表：添加 cid 列
+    try {
+      this.db.exec('ALTER TABLE whitelist ADD COLUMN cid TEXT');
+      console.log('  ✅ whitelist 表已添加 cid 列');
+    } catch (error) {
+      if (error.message.includes('duplicate column')) {
+        console.log('  ℹ️ whitelist.cid 列已存在');
+      } else {
+        console.log('  ⚠️ whitelist 表迁移失败:', error.message);
+      }
+    }
+
+    // 迁移 admins 表：添加 username 和 password_hash 列
+    try {
+      this.db.exec('ALTER TABLE admins ADD COLUMN username TEXT');
+      console.log('  ✅ admins 表已添加 username 列');
+    } catch (error) {
+      if (error.message.includes('duplicate column')) {
+        console.log('  ℹ️ admins.username 列已存在');
+      } else {
+        console.log('  ⚠️ admins.username 迁移失败:', error.message);
+      }
+    }
+
+    try {
+      this.db.exec('ALTER TABLE admins ADD COLUMN password_hash TEXT');
+      console.log('  ✅ admins 表已添加 password_hash 列');
+    } catch (error) {
+      if (error.message.includes('duplicate column')) {
+        console.log('  ℹ️ admins.password_hash 列已存在');
+      } else {
+        console.log('  ⚠️ admins.password_hash 迁移失败:', error.message);
+      }
+    }
+
+    console.log('✅ 数据库迁移完成');
   }
 
   /**
