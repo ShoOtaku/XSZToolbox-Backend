@@ -91,11 +91,11 @@ class DatabaseManager {
       );
     `);
 
-    // 管理员表
+    // 管理员表（cid_hash 可为空，用于支持用户名/密码登录）
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
+        username TEXT,
         password_hash TEXT,
         cid_hash TEXT,
         role TEXT DEFAULT 'admin',
@@ -199,10 +199,10 @@ class DatabaseManager {
         // 生成密码哈希
         const passwordHash = bcrypt.hashSync(defaultPassword, SALT_ROUNDS);
 
-        // 插入默认管理员
+        // 插入默认管理员（cid_hash 设为 NULL）
         this.db.prepare(`
-          INSERT INTO admins (username, password_hash, role)
-          VALUES (?, ?, 'admin')
+          INSERT INTO admins (username, password_hash, cid_hash, role)
+          VALUES (?, ?, NULL, 'admin')
         `).run(defaultUsername, passwordHash);
 
         console.log(`✅ 已创建默认管理员账户: ${defaultUsername}`);
