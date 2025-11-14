@@ -281,19 +281,25 @@ class App {
             return;
         }
 
-        const html = whitelist.map(entry => `
+        const html = whitelist.map(entry => {
+            // 确保 cid_hash 存在且有效
+            const cidHash = entry.cid_hash || '';
+            const canDelete = cidHash.length === 64; // SHA256 哈希长度为 64
+
+            return `
             <tr>
                 <td>${entry.cid || '<span style="color:#999;">未记录</span>'}</td>
                 <td>${entry.note || '-'}</td>
                 <td>${this.formatDate(entry.added_at)}</td>
                 <td>${entry.added_by || '-'}</td>
                 <td>
-                    <button class="btn btn-danger btn-sm" onclick="app.handleRemoveWhitelist('${entry.cid_hash}')">
-                        删除
-                    </button>
+                    ${canDelete
+                        ? `<button class="btn btn-danger btn-sm" onclick="app.handleRemoveWhitelist('${cidHash}')">删除</button>`
+                        : '<span style="color:#999;">无法删除</span>'}
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
 
         tbody.innerHTML = html;
     }
@@ -352,19 +358,30 @@ class App {
      * 处理移除白名单
      */
     async handleRemoveWhitelist(cidHash) {
+        // 验证 CID 哈希有效性
+        if (!cidHash || cidHash.length !== 64) {
+            this.showToast('无效的 CID 哈希', 'error');
+            console.error('无效的 cidHash:', cidHash);
+            return;
+        }
+
         if (!confirm(`确定要移除该用户吗？\n\nCID 哈希: ${cidHash}`)) {
             return;
         }
 
         try {
             this.showLoading(true);
+            console.log('正在删除白名单:', cidHash);
             const response = await api.removeWhitelist(cidHash);
 
             if (response.success) {
                 this.showToast('移除成功！', 'success');
                 this.loadWhitelist();
+            } else {
+                this.showToast(response.message || '移除失败', 'error');
             }
         } catch (error) {
+            console.error('删除白名单失败:', error);
             this.showToast(error.message || '移除失败', 'error');
         } finally {
             this.showLoading(false);

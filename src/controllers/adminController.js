@@ -197,6 +197,9 @@ async function addWhitelist(req, res) {
 
     const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
 
+    // 调试日志：输出即将插入的数据
+    logger.debug(`准备添加白名单: CID=${finalCid}, Hash=${finalCidHash}, Note=${note}`);
+
     const success = whitelistModel.addToWhitelist({
       cid: finalCid,
       cidHash: finalCidHash,
@@ -206,7 +209,7 @@ async function addWhitelist(req, res) {
     });
 
     if (success) {
-      logger.info(`✅ 添加白名单成功: ${finalCid || finalCidHash} by ${adminIdentifier}`);
+      logger.info(`✅ 添加白名单成功: CID=${finalCid}, Hash=${finalCidHash}, By=${adminIdentifier}`);
       res.json({
         success: true,
         message: '已添加到白名单',
