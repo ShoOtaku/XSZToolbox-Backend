@@ -1,0 +1,110 @@
+# Nginx 反向代理配置示例
+# 使用前请复制为 nginx.conf 并根据实际情况修改
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    # 基础配置
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
+
+    # 日志格式
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log warn;
+
+    # Gzip 压缩
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss;
+
+    # 上游服务器
+    upstream xsztoolbox_backend {
+        server xsztoolbox-backend:3000;
+    }
+
+    # HTTP -> HTTPS 重定向
+    server {
+        listen 80;
+        server_name your-domain.com;  # 修改为您的域名
+
+        location / {
+            return 301 https://$server_name$request_uri;
+        }
+    }
+
+    # HTTPS 服务器
+    server {
+        listen 443 ssl http2;
+        server_name your-domain.com;  # 修改为您的域名
+
+        # SSL 证书配置
+        ssl_certificate /etc/nginx/ssl/fullchain.pem;
+        ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+        # SSL 安全配置
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+
+        # 安全头
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # 客户端请求体大小限制
+        client_max_body_size 10M;
+
+        # API 代理
+        location /api/ {
+            proxy_pass http://xsztoolbox_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+
+            # 超时配置
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
+        }
+
+        # 管理面板
+        location /admin/ {
+            proxy_pass http://xsztoolbox_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # 根路径
+        location / {
+            proxy_pass http://xsztoolbox_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # 健康检查（允许内网访问）
+        location /api/health {
+            access_log off;
+            proxy_pass http://xsztoolbox_backend;
+        }
+    }
+}

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XSZToolbox 管理面板</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>🎮 XSZToolbox</h1>
+                <p>管理员控制面板</p>
+            </div>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="cidHash">管理员 CID 哈希</label>
+                    <input type="text" id="cidHash" placeholder="请输入您的 CID 哈希 (64位)" maxlength="64">
+                    <small>提示: 使用与插件相同的 SHA256 哈希算法计算的 CID</small>
+                </div>
+                <button id="loginBtn" class="btn btn-primary">登录</button>
+                <div id="loginError" class="error-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主应用页面 -->
+    <div id="mainPage" class="page">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>🎮 XSZToolbox</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" data-page="dashboard" class="nav-item active">
+                    <span class="icon">📊</span>
+                    <span>仪表盘</span>
+                </a>
+                <a href="#" data-page="whitelist" class="nav-item">
+                    <span class="icon">✅</span>
+                    <span>白名单管理</span>
+                </a>
+                <a href="#" data-page="users" class="nav-item">
+                    <span class="icon">👥</span>
+                    <span>用户列表</span>
+                </a>
+                <a href="#" data-page="logs" class="nav-item">
+                    <span class="icon">📝</span>
+                    <span>审计日志</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="logoutBtn" class="btn btn-secondary">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 仪表盘 -->
+            <div id="dashboardContent" class="content-section active">
+                <div class="content-header">
+                    <h1>📊 仪表盘</h1>
+                    <button id="refreshStatsBtn" class="btn btn-primary btn-sm">🔄 刷新数据</button>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <div class="stat-label">总用户数</div>
+                            <div class="stat-value" id="totalUsers">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-info">
+                            <div class="stat-label">今日活跃</div>
+                            <div class="stat-value" id="activeToday">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-info">
+                            <div class="stat-label">白名单数量</div>
+                            <div class="stat-value" id="whitelistCount">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🆕</div>
+                        <div class="stat-info">
+                            <div class="stat-label">7日新增</div>
+                            <div class="stat-value" id="newUsers7d">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-row">
+                    <div class="dashboard-card">
+                        <h3>🏆 服务器排行榜</h3>
+                        <div id="topServers" class="server-list">加载中...</div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>📈 最近活动</h3>
+                        <div id="recentLogs" class="log-list">加载中...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 白名单管理 -->
+            <div id="whitelistContent" class="content-section">
+                <div class="content-header">
+                    <h1>✅ 白名单管理</h1>
+                    <button id="addWhitelistBtn" class="btn btn-primary">➕ 添加白名单</button>
+                </div>
+
+                <!-- 添加白名单表单 -->
+                <div id="addWhitelistForm" class="form-card" style="display: none;">
+                    <h3>添加新用户到白名单</h3>
+                    <div class="form-group">
+                        <label for="newCidHash">CID 哈希</label>
+                        <input type="text" id="newCidHash" placeholder="64位 SHA256 哈希" maxlength="64">
+                    </div>
+                    <div class="form-group">
+                        <label for="newNote">备注</label>
+                        <input type="text" id="newNote" placeholder="添加备注信息">
+                    </div>
+                    <div class="form-actions">
+                        <button id="submitWhitelistBtn" class="btn btn-primary">✅ 确认添加</button>
+                        <button id="cancelWhitelistBtn" class="btn btn-secondary">❌ 取消</button>
+                    </div>
+                </div>
+
+                <!-- 白名单列表 -->
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>CID 哈希</th>
+                                <th>备注</th>
+                                <th>添加时间</th>
+                                <th>添加者</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="whitelistTable">
+                            <tr>
+                                <td colspan="5" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 用户列表 -->
+            <div id="usersContent" class="content-section">
+                <div class="content-header">
+                    <h1>👥 用户列表</h1>
+                    <button id="refreshUsersBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>CID 哈希</th>
+                                <th>角色名</th>
+                                <th>服务器</th>
+                                <th>首次登录</th>
+                                <th>最后登录</th>
+                                <th>登录次数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <tr>
+                                <td colspan="6" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 审计日志 -->
+            <div id="logsContent" class="content-section">
+                <div class="content-header">
+                    <h1>📝 审计日志</h1>
+                    <div class="filter-group">
+                        <select id="logActionFilter">
+                            <option value="">所有操作</option>
+                            <option value="user_submit">用户提交</option>
+                            <option value="user_verify">用户验证</option>
+                            <option value="admin_login">管理员登录</option>
+                            <option value="whitelist_add">添加白名单</option>
+                            <option value="whitelist_remove">移除白名单</option>
+                        </select>
+                        <button id="refreshLogsBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>操作</th>
+                                <th>CID 哈希</th>
+                                <th>IP 地址</th>
+                                <th>详情</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTable">
+                            <tr>
+                                <td colspan="5" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 脚本文件 -->
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

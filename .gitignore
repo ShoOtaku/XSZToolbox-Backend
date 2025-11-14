@@ -1,0 +1,45 @@
+# 依赖
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 环境变量
+.env
+.env.local
+.env.production
+
+# 数据库
+database/*.db
+database/*.db-shm
+database/*.db-wal
+
+# 日志文件
+logs/*.log
+logs/**/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 构建产物
+dist/
+build/
+*.tgz
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 管理面板构建产物
+admin-panel/dist/
+admin-panel/build/
+admin-panel/node_modules/
