@@ -56,8 +56,10 @@ class App {
         document.getElementById('logActionFilter')?.addEventListener('change', () => this.loadLogs());
 
         // 回车登录
-        document.getElementById('cidHash')?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.handleLogin();
+        ['username', 'password'].forEach(id => {
+            document.getElementById(id)?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.handleLogin();
+            });
         });
     }
 
@@ -124,26 +126,22 @@ class App {
     }
 
     /**
-     * 处理登录
+     * 处理登录（新版：用户名/密码）
      */
     async handleLogin() {
-        const cidHash = document.getElementById('cidHash').value.trim();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
         const errorElement = document.getElementById('loginError');
 
         // 验证输入
-        if (!cidHash) {
-            this.showError(errorElement, '请输入 CID 哈希');
-            return;
-        }
-
-        if (cidHash.length !== 64) {
-            this.showError(errorElement, 'CID 哈希必须是 64 位');
+        if (!username || !password) {
+            this.showError(errorElement, '请输入用户名和密码');
             return;
         }
 
         try {
             this.showLoading(true);
-            const response = await api.login(cidHash);
+            const response = await api.login(username, password);
 
             if (response.success) {
                 authManager.setToken(response.token);
@@ -285,7 +283,7 @@ class App {
 
         const html = whitelist.map(entry => `
             <tr>
-                <td class="text-truncate" title="${entry.cid_hash}">${entry.cid_hash}</td>
+                <td>${entry.cid || '<span style="color:#999;">未记录</span>'}</td>
                 <td>${entry.note || '-'}</td>
                 <td>${this.formatDate(entry.added_at)}</td>
                 <td>${entry.added_by || '-'}</td>
@@ -305,7 +303,7 @@ class App {
      */
     showAddWhitelistForm() {
         document.getElementById('addWhitelistForm').style.display = 'block';
-        document.getElementById('newCidHash').value = '';
+        document.getElementById('newCid').value = '';
         document.getElementById('newNote').value = '';
     }
 
@@ -317,25 +315,26 @@ class App {
     }
 
     /**
-     * 处理添加白名单
+     * 处理添加白名单（新版：明文 CID）
      */
     async handleAddWhitelist() {
-        const cidHash = document.getElementById('newCidHash').value.trim();
+        const cid = document.getElementById('newCid').value.trim();
         const note = document.getElementById('newNote').value.trim();
 
-        if (!cidHash) {
-            this.showToast('请输入 CID 哈希', 'error');
+        if (!cid) {
+            this.showToast('请输入 CID', 'error');
             return;
         }
 
-        if (cidHash.length !== 64) {
-            this.showToast('CID 哈希必须是 64 位', 'error');
+        // 验证 CID 格式（应该是数字）
+        if (!/^\d+$/.test(cid)) {
+            this.showToast('CID 必须是数字', 'error');
             return;
         }
 
         try {
             this.showLoading(true);
-            const response = await api.addWhitelist(cidHash, note);
+            const response = await api.addWhitelist(cid, note);
 
             if (response.success) {
                 this.showToast('添加成功！', 'success');
@@ -391,21 +390,22 @@ class App {
     }
 
     /**
-     * 渲染用户表格
+     * 渲染用户表格（显示明文 CID 和 QQ）
      */
     renderUsersTable(users) {
         const tbody = document.getElementById('usersTable');
 
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无用户</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">暂无用户</td></tr>';
             return;
         }
 
         const html = users.map(user => `
             <tr>
-                <td class="text-truncate" title="${user.cid_hash}">${user.cid_hash}</td>
+                <td>${user.cid || '<span style="color:#999;">未记录</span>'}</td>
                 <td>${user.character_name || '-'}</td>
                 <td>${user.world_name || '-'}</td>
+                <td>${user.qq_info || '-'}</td>
                 <td>${this.formatDate(user.first_login)}</td>
                 <td>${this.formatDate(user.last_login)}</td>
                 <td>${user.login_count || 0}</td>

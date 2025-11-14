@@ -16,12 +16,18 @@
             </div>
             <div class="login-form">
                 <div class="form-group">
-                    <label for="cidHash">管理员 CID 哈希</label>
-                    <input type="text" id="cidHash" placeholder="请输入您的 CID 哈希 (64位)" maxlength="64">
-                    <small>提示: 使用与插件相同的 SHA256 哈希算法计算的 CID</small>
+                    <label for="username">用户名</label>
+                    <input type="text" id="username" placeholder="请输入用户名" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
                 </div>
                 <button id="loginBtn" class="btn btn-primary">登录</button>
                 <div id="loginError" class="error-message"></div>
+                <div class="login-hint">
+                    <small>默认账户: admin / admin123</small>
+                </div>
             </div>
         </div>
     </div>
@@ -118,8 +124,9 @@
                 <div id="addWhitelistForm" class="form-card" style="display: none;">
                     <h3>添加新用户到白名单</h3>
                     <div class="form-group">
-                        <label for="newCidHash">CID 哈希</label>
-                        <input type="text" id="newCidHash" placeholder="64位 SHA256 哈希" maxlength="64">
+                        <label for="newCid">CID（角色ID）</label>
+                        <input type="text" id="newCid" placeholder="请输入用户的 CID（数字）">
+                        <small>提示：输入用户的明文 CID，系统会自动计算哈希</small>
                     </div>
                     <div class="form-group">
                         <label for="newNote">备注</label>
@@ -136,7 +143,7 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>CID 哈希</th>
+                                <th>CID</th>
                                 <th>备注</th>
                                 <th>添加时间</th>
                                 <th>添加者</th>
@@ -162,9 +169,10 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>CID 哈希</th>
+                                <th>CID</th>
                                 <th>角色名</th>
                                 <th>服务器</th>
+                                <th>QQ号</th>
                                 <th>首次登录</th>
                                 <th>最后登录</th>
                                 <th>登录次数</th>

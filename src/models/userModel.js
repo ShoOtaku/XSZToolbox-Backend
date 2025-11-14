@@ -10,10 +10,15 @@ class UserModel {
   /**
    * 创建或更新用户数据
    * @param {Object} userData - 用户数据
+   * @param {string} userData.cid - 明文 CID（可选）
+   * @param {string} userData.cidHash - CID 哈希
+   * @param {string} userData.characterName - 角色名
+   * @param {string} userData.worldName - 服务器名
+   * @param {string} userData.qqInfo - QQ 信息
    * @returns {Object} 操作结果
    */
   upsertUser(userData) {
-    const { cidHash, characterName, worldName, qqInfo } = userData;
+    const { cid, cidHash, characterName, worldName, qqInfo } = userData;
 
     // 检查用户是否存在
     const existing = this.db.prepare(`
@@ -24,13 +29,14 @@ class UserModel {
       // 更新现有用户
       this.db.prepare(`
         UPDATE users
-        SET character_name = ?,
+        SET cid = COALESCE(?, cid),
+            character_name = ?,
             world_name = ?,
             qq_info = COALESCE(?, qq_info),
             last_login = CURRENT_TIMESTAMP,
             login_count = login_count + 1
         WHERE cid_hash = ?
-      `).run(characterName, worldName, qqInfo, cidHash);
+      `).run(cid || null, characterName, worldName, qqInfo, cidHash);
 
       return {
         status: 'existing_user',
@@ -39,9 +45,9 @@ class UserModel {
     } else {
       // 插入新用户
       this.db.prepare(`
-        INSERT INTO users (cid_hash, character_name, world_name, qq_info)
-        VALUES (?, ?, ?, ?)
-      `).run(cidHash, characterName, worldName, qqInfo);
+        INSERT INTO users (cid, cid_hash, character_name, world_name, qq_info)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(cid || null, cidHash, characterName, worldName, qqInfo);
 
       return {
         status: 'new_user',

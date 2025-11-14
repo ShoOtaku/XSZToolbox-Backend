@@ -81,10 +81,13 @@ class APIClient {
     // ==================== 认证接口 ====================
 
     /**
-     * 管理员登录
+     * 管理员登录（新版：用户名/密码）
      */
-    async login(cidHash) {
-        return this.post('/api/admin/login', { cid_hash: cidHash });
+    async login(username, password) {
+        return this.post('/api/admin/login', {
+            username,
+            password
+        });
     }
 
     // ==================== 统计接口 ====================
@@ -106,11 +109,11 @@ class APIClient {
     }
 
     /**
-     * 添加白名单
+     * 添加白名单（新版：明文 CID）
      */
-    async addWhitelist(cidHash, note) {
+    async addWhitelist(cid, note) {
         return this.post('/api/admin/whitelist/add', {
-            cid_hash: cidHash,
+            cid: cid,
             note: note || ''
         });
     }

@@ -50,6 +50,7 @@ class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid TEXT,
         cid_hash TEXT UNIQUE NOT NULL,
         character_name TEXT,
         world_name TEXT,
@@ -65,6 +66,7 @@ class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS whitelist (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid TEXT,
         cid_hash TEXT UNIQUE NOT NULL,
         note TEXT,
         added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -93,7 +95,9 @@ class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid_hash TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE,
+        password_hash TEXT,
+        cid_hash TEXT,
         role TEXT DEFAULT 'admin',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -101,12 +105,15 @@ class DatabaseManager {
 
     // 创建索引提高查询性能
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_users_cid ON users(cid);
       CREATE INDEX IF NOT EXISTS idx_users_cid_hash ON users(cid_hash);
       CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login);
+      CREATE INDEX IF NOT EXISTS idx_whitelist_cid ON whitelist(cid);
       CREATE INDEX IF NOT EXISTS idx_whitelist_cid_hash ON whitelist(cid_hash);
       CREATE INDEX IF NOT EXISTS idx_whitelist_expires_at ON whitelist(expires_at);
       CREATE INDEX IF NOT EXISTS idx_audit_cid_hash ON audit_logs(cid_hash);
       CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
     `);
 
     console.log('✅ 数据库表结构已初始化');
@@ -114,28 +121,58 @@ class DatabaseManager {
 
   /**
    * 初始化管理员账户
+   * 新版：创建用户名/密码管理员
+   * 兼容旧版：支持通过 CID 哈希创建管理员
    */
   initAdmins() {
-    const adminHashes = (process.env.ADMIN_CID_HASHES || '').split(',').filter(Boolean);
+    const bcrypt = require('bcrypt');
+    const SALT_ROUNDS = 10;
 
-    if (adminHashes.length === 0) {
-      console.warn('⚠️ 未配置管理员 CID 哈希，请在 .env 中设置 ADMIN_CID_HASHES');
-      return;
+    // 创建默认管理员账户（admin / admin123）
+    const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
+    const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+    try {
+      // 检查是否已存在该用户名
+      const existing = this.db.prepare('SELECT id FROM admins WHERE username = ?').get(defaultUsername);
+
+      if (!existing) {
+        // 生成密码哈希
+        const passwordHash = bcrypt.hashSync(defaultPassword, SALT_ROUNDS);
+
+        // 插入默认管理员
+        this.db.prepare(`
+          INSERT INTO admins (username, password_hash, role)
+          VALUES (?, ?, 'admin')
+        `).run(defaultUsername, passwordHash);
+
+        console.log(`✅ 已创建默认管理员账户: ${defaultUsername}`);
+        console.log(`   默认密码: ${defaultPassword}`);
+        console.log(`   ⚠️ 请登录后立即修改密码！`);
+      } else {
+        console.log(`ℹ️ 管理员账户 ${defaultUsername} 已存在`);
+      }
+    } catch (error) {
+      console.error(`❌ 创建管理员账户失败: ${error.message}`);
     }
 
-    const insertStmt = this.db.prepare(`
-      INSERT OR IGNORE INTO admins (cid_hash, role)
-      VALUES (?, 'admin')
-    `);
+    // 兼容旧版：支持通过环境变量配置 CID 哈希管理员
+    const adminHashes = (process.env.ADMIN_CID_HASHES || '').split(',').filter(Boolean);
+    if (adminHashes.length > 0) {
+      const insertStmt = this.db.prepare(`
+        INSERT OR IGNORE INTO admins (cid_hash, role)
+        VALUES (?, 'admin')
+      `);
 
-    const insertMany = this.db.transaction((hashes) => {
-      for (const hash of hashes) {
-        insertStmt.run(hash.trim());
-      }
-    });
+      const insertMany = this.db.transaction((hashes) => {
+        for (const hash of hashes) {
+          insertStmt.run(hash.trim());
+        }
+      });
 
-    insertMany(adminHashes);
-    console.log(`✅ 已初始化 ${adminHashes.length} 个管理员账户`);
+      insertMany(adminHashes);
+      console.log(`✅ 已初始化 ${adminHashes.length} 个 CID 哈希管理员（兼容模式）`);
+    }
   }
 
   /**

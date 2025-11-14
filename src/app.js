@@ -51,7 +51,7 @@ app.use(verifySignature);
 // ==================== 静态文件服务 ====================
 
 // 管理面板静态文件
-const adminPanelPath = path.join(__dirname, '../admin-panel/dist');
+const adminPanelPath = path.join(__dirname, '../admin-panel');
 app.use('/admin', express.static(adminPanelPath));
 
 // ==================== API 路由 ====================

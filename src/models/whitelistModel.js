@@ -24,16 +24,21 @@ class WhitelistModel {
   /**
    * 添加用户到白名单
    * @param {Object} entry - 白名单条目
+   * @param {string} entry.cid - 明文 CID（可选）
+   * @param {string} entry.cidHash - CID 哈希
+   * @param {string} entry.note - 备注
+   * @param {string} entry.addedBy - 添加者
+   * @param {string} entry.expiresAt - 过期时间
    * @returns {boolean} 是否成功
    */
   addToWhitelist(entry) {
-    const { cidHash, note, addedBy, expiresAt } = entry;
+    const { cid, cidHash, note, addedBy, expiresAt } = entry;
 
     try {
       this.db.prepare(`
-        INSERT INTO whitelist (cid_hash, note, added_by, expires_at)
-        VALUES (?, ?, ?, ?)
-      `).run(cidHash, note, addedBy, expiresAt || null);
+        INSERT INTO whitelist (cid, cid_hash, note, added_by, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(cid || null, cidHash, note, addedBy, expiresAt || null);
       return true;
     } catch (error) {
       // 如果已存在，返回 false
@@ -63,15 +68,16 @@ class WhitelistModel {
    * @returns {boolean} 是否成功
    */
   updateWhitelist(cidHash, updates) {
-    const { note, expiresAt, authorized } = updates;
+    const { cid, note, expiresAt, authorized } = updates;
 
     const result = this.db.prepare(`
       UPDATE whitelist
-      SET note = COALESCE(?, note),
+      SET cid = COALESCE(?, cid),
+          note = COALESCE(?, note),
           expires_at = COALESCE(?, expires_at),
           authorized = COALESCE(?, authorized)
       WHERE cid_hash = ?
-    `).run(note, expiresAt, authorized, cidHash);
+    `).run(cid, note, expiresAt, authorized, cidHash);
 
     return result.changes > 0;
   }
@@ -109,7 +115,7 @@ class WhitelistModel {
    */
   getWhitelistForGitHub() {
     const entries = this.db.prepare(`
-      SELECT cid_hash, note, added_at, added_by
+      SELECT cid, cid_hash, note, added_at, added_by
       FROM whitelist
       WHERE authorized = 1
         AND (expires_at IS NULL OR expires_at > datetime('now'))
@@ -120,6 +126,7 @@ class WhitelistModel {
       version: 1,
       last_updated: new Date().toISOString(),
       entries: entries.map(entry => ({
+        cid: entry.cid || null,
         cid_hash: entry.cid_hash,
         note: entry.note || '',
         added_at: entry.added_at,
@@ -135,14 +142,15 @@ class WhitelistModel {
    */
   importFromGitHub(githubData) {
     const insertStmt = this.db.prepare(`
-      INSERT OR IGNORE INTO whitelist (cid_hash, note, added_by, added_at)
-      VALUES (?, ?, ?, ?)
+      INSERT OR IGNORE INTO whitelist (cid, cid_hash, note, added_by, added_at)
+      VALUES (?, ?, ?, ?, ?)
     `);
 
     const importMany = this.db.transaction((entries) => {
       let count = 0;
       for (const entry of entries) {
         const result = insertStmt.run(
+          entry.cid || null,
           entry.cid_hash,
           entry.note,
           entry.added_by || 'admin',

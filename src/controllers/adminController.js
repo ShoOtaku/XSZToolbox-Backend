@@ -2,6 +2,8 @@
  * 管理员控制器
  */
 
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const AdminModel = require('../models/adminModel');
 const UserModel = require('../models/userModel');
 const WhitelistModel = require('../models/whitelistModel');
@@ -16,44 +18,88 @@ const { generateToken } = require('../middleware/auth');
  */
 async function login(req, res) {
   try {
-    const { cid_hash } = req.body;
+    const { username, password, cid_hash } = req.body;
 
-    if (!cid_hash || cid_hash.length !== 64) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid cid_hash',
-        message: '无效的 CID 哈希'
+    // 新版登录：用户名+密码
+    if (username && password) {
+      // 获取数据库实例
+      const db = dbManager.getDb();
+      const adminModel = new AdminModel(db);
+
+      // 查询管理员
+      const admin = adminModel.getAdminByUsername(username);
+
+      if (!admin || !admin.password_hash) {
+        logger.warn(`❌ 管理员登录失败: ${username} - 用户名或密码错误`);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid credentials',
+          message: '用户名或密码错误'
+        });
+      }
+
+      // 验证密码
+      const passwordMatch = await bcrypt.compare(password, admin.password_hash);
+
+      if (!passwordMatch) {
+        logger.warn(`❌ 管理员登录失败: ${username} - 密码错误`);
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid credentials',
+          message: '用户名或密码错误'
+        });
+      }
+
+      // 生成 JWT Token
+      const token = generateToken(admin.username, admin.role, true);
+      const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+
+      logger.info(`✅ 管理员登录成功: ${username}`);
+
+      return res.json({
+        success: true,
+        token,
+        expires_in: expiresIn,
+        role: admin.role,
+        username: admin.username,
+        message: '登录成功'
       });
     }
 
-    // 获取数据库实例
-    const db = dbManager.getDb();
-    const adminModel = new AdminModel(db);
+    // 旧版登录：CID 哈希（兼容）
+    if (cid_hash && cid_hash.length === 64) {
+      const db = dbManager.getDb();
+      const adminModel = new AdminModel(db);
+      const admin = adminModel.getAdmin(cid_hash);
 
-    // 检查是否为管理员
-    const admin = adminModel.getAdmin(cid_hash);
+      if (!admin) {
+        logger.warn(`❌ 管理员登录失败: ${cid_hash} - 非管理员`);
+        return res.status(403).json({
+          success: false,
+          error: 'Not an admin',
+          message: '您不是管理员'
+        });
+      }
 
-    if (!admin) {
-      logger.warn(`❌ 管理员登录失败: ${cid_hash} - 非管理员`);
-      return res.status(403).json({
-        success: false,
-        error: 'Not an admin',
-        message: '您不是管理员'
+      const token = generateToken(admin.cid_hash, admin.role, false);
+      const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+
+      logger.info(`✅ 管理员登录成功（旧版）: ${cid_hash}`);
+
+      return res.json({
+        success: true,
+        token,
+        expires_in: expiresIn,
+        role: admin.role,
+        message: '登录成功'
       });
     }
 
-    // 生成 JWT Token
-    const token = generateToken(admin.cid_hash, admin.role);
-    const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
-
-    logger.info(`✅ 管理员登录成功: ${cid_hash}`);
-
-    res.json({
-      success: true,
-      token,
-      expires_in: expiresIn,
-      role: admin.role,
-      message: '登录成功'
+    // 参数错误
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid request',
+      message: '请提供用户名和密码'
     });
 
   } catch (error) {
@@ -87,7 +133,8 @@ async function getStats(req, res) {
       recent_logs: auditLogModel.getLogStats(24)
     };
 
-    logger.info(`✅ 统计数据查询成功: ${req.admin.cidHash}`);
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+    logger.info(`✅ 统计数据查询成功: ${adminIdentifier}`);
 
     res.json({
       success: true,
@@ -107,37 +154,67 @@ async function getStats(req, res) {
 /**
  * 添加白名单
  * POST /api/admin/whitelist/add
+ * 支持两种方式：
+ * 1. 新版：传入明文 cid，后端自动计算哈希
+ * 2. 旧版：传入 cid_hash（兼容）
  */
 async function addWhitelist(req, res) {
   try {
-    const { cid_hash, note, expires_at } = req.body;
+    const { cid, cid_hash, note, expires_at } = req.body;
 
-    if (!cid_hash || cid_hash.length !== 64) {
+    let finalCid = null;
+    let finalCidHash = null;
+
+    // 优先使用明文 CID
+    if (cid) {
+      // 验证 CID 格式（应该是数字字符串）
+      if (!/^\d+$/.test(cid)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid cid',
+          message: '无效的 CID 格式，应为数字'
+        });
+      }
+
+      finalCid = cid;
+      // 计算哈希：SHA256(cid + 盐值)
+      finalCidHash = crypto.createHash('sha256')
+        .update(cid + 'XSZToolbox_CID_Salt_2025')
+        .digest('hex');
+    } else if (cid_hash && cid_hash.length === 64) {
+      // 兼容旧版：只有哈希
+      finalCidHash = cid_hash;
+    } else {
       return res.status(400).json({
         success: false,
-        error: 'Invalid cid_hash',
-        message: '无效的 CID 哈希'
+        error: 'Invalid request',
+        message: '请提供 CID 或 CID 哈希'
       });
     }
 
     const db = dbManager.getDb();
     const whitelistModel = new WhitelistModel(db);
 
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+
     const success = whitelistModel.addToWhitelist({
-      cidHash: cid_hash,
+      cid: finalCid,
+      cidHash: finalCidHash,
       note: note || '',
-      addedBy: req.admin.cidHash,
+      addedBy: adminIdentifier,
       expiresAt: expires_at || null
     });
 
     if (success) {
-      logger.info(`✅ 添加白名单成功: ${cid_hash} by ${req.admin.cidHash}`);
+      logger.info(`✅ 添加白名单成功: ${finalCid || finalCidHash} by ${adminIdentifier}`);
       res.json({
         success: true,
-        message: '已添加到白名单'
+        message: '已添加到白名单',
+        cid: finalCid,
+        cid_hash: finalCidHash
       });
     } else {
-      logger.warn(`⚠️ 添加白名单失败: ${cid_hash} - 已存在`);
+      logger.warn(`⚠️ 添加白名单失败: ${finalCid || finalCidHash} - 已存在`);
       res.status(409).json({
         success: false,
         error: 'Already exists',
@@ -176,8 +253,10 @@ async function removeWhitelist(req, res) {
 
     const success = whitelistModel.removeFromWhitelist(hash);
 
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+
     if (success) {
-      logger.info(`✅ 移除白名单成功: ${hash} by ${req.admin.cidHash}`);
+      logger.info(`✅ 移除白名单成功: ${hash} by ${adminIdentifier}`);
       res.json({
         success: true,
         message: '已从白名单移除'

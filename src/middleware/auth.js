@@ -52,10 +52,18 @@ function verifyToken(req, res, next) {
     // 检查是否为管理员
     const db = dbManager.getDb();
     const adminModel = new AdminModel(db);
-    const isAdmin = adminModel.isAdmin(decoded.cidHash);
 
-    if (!isAdmin) {
-      logger.warn(`❌ JWT 验证失败: 非管理员 - ${decoded.cidHash}`);
+    // 优先使用 username，兼容旧版的 cidHash
+    let admin = null;
+    if (decoded.username) {
+      admin = adminModel.getAdminByUsername(decoded.username);
+    } else if (decoded.cidHash) {
+      // 兼容旧版 Token
+      admin = adminModel.getAdmin(decoded.cidHash);
+    }
+
+    if (!admin) {
+      logger.warn(`❌ JWT 验证失败: 非管理员 - ${decoded.username || decoded.cidHash}`);
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
@@ -65,7 +73,8 @@ function verifyToken(req, res, next) {
 
     // 将解码后的信息附加到 request 对象
     req.admin = {
-      cidHash: decoded.cidHash,
+      username: decoded.username || null,
+      cidHash: decoded.cidHash || null,
       role: decoded.role
     };
 
@@ -99,17 +108,18 @@ function verifyToken(req, res, next) {
 }
 
 /**
- * 生成 JWT Token
- * @param {string} cidHash - CID 哈希
+ * 生成 JWT Token（新版使用用户名）
+ * @param {string} identifier - 用户名或 CID 哈希
  * @param {string} role - 角色
+ * @param {boolean} isUsername - 是否为用户名（默认 true）
  * @returns {string} JWT Token
  */
-function generateToken(cidHash, role = 'admin') {
+function generateToken(identifier, role = 'admin', isUsername = true) {
   const secret = process.env.JWT_SECRET;
   const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
 
   const payload = {
-    cidHash,
+    ...(isUsername ? { username: identifier } : { cidHash: identifier }),
     role,
     iat: Math.floor(Date.now() / 1000)
   };
