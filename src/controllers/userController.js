@@ -40,10 +40,11 @@ async function submitUserData(req, res) {
     // 如果提供了明文 CID，验证其哈希是否匹配
     if (plainCid) {
       const calculatedHash = crypto.createHash('sha256')
-        .update(plainCid + 'XSZToolbox_CID_Salt_2025')
-        .digest('hex');
+        .update('XSZToolbox_CID_Salt_2025' + plainCid)
+        .digest('hex')
+        .toUpperCase();
 
-      if (calculatedHash !== cid) {
+      if (calculatedHash.toUpperCase() !== cid.toUpperCase()) {
         logger.warn(`⚠️ CID 哈希不匹配: plainCid=${plainCid}, hash=${cid}`);
         // 不阻止请求，只记录警告
       }

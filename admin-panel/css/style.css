@@ -87,6 +87,7 @@ body {
     position: fixed;
     height: 100vh;
     overflow-y: auto;
+    flex-shrink: 0;
 }
 
 .sidebar-header {
@@ -139,6 +140,7 @@ body {
     margin-left: 260px;
     padding: 30px;
     min-height: 100vh;
+    flex: 1;
 }
 
 /* ==================== 内容区域 ==================== */
@@ -210,7 +212,7 @@ body {
 /* ==================== 仪表盘行 ==================== */
 .dashboard-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
 }
 
@@ -365,7 +367,8 @@ body {
     background: white;
     border-radius: 8px;
     box-shadow: var(--shadow);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .data-table {
@@ -455,7 +458,7 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* ==================== Toast 通知 ==================== */
+/* ==================== Toast 通知  ==================== */
 .toast {
     position: fixed;
     top: 20px;
@@ -501,7 +504,7 @@ body {
     display: block;
 }
 
-/* ==================== QQ列样式 ==================== */
+/* ==================== QQ列样式?==================== */
 .qq-cell {
     min-width: 150px;
     max-width: 250px;
@@ -521,19 +524,46 @@ body {
     cursor: help;
 }
 
-/* ==================== 响应式设计 ==================== */
-@media (max-width: 768px) {
+/* ==================== 响应式设定 ==================== */
+@media (max-width: 1024px) {
+    #mainPage {
+        flex-direction: column;
+    }
+
     .sidebar {
+        position: relative;
         width: 100%;
         height: auto;
-        position: relative;
+        box-shadow: var(--shadow);
+    }
+
+    .sidebar-nav {
+        padding: 12px 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+    }
+
+    .nav-item {
+        border-left: none;
+        border-radius: 8px;
+        justify-content: center;
+    }
+
+    .sidebar-footer {
+        border-top: none;
+        display: flex;
+        justify-content: flex-end;
     }
 
     .main-content {
         margin-left: 0;
-        padding: 20px;
+        width: 100%;
+        padding: 24px 20px;
     }
+}
 
+@media (max-width: 768px) {
     .stats-grid {
         grid-template-columns: 1fr;
     }
@@ -554,6 +584,25 @@ body {
     }
 
     .filter-group select {
+        width: 100%;
+    }
+}
+
+@media (max-width: 576px) {
+    .login-container {
+        padding: 24px 20px;
+    }
+
+    .sidebar-nav {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .content-header h1 {
+        font-size: 22px;
+    }
+
+    .content-header .btn,
+    .filter-group .btn {
         width: 100%;
     }
 }
