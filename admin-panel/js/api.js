@@ -44,7 +44,10 @@ class APIClient {
                 if (response.status === 401) {
                     authManager.logout();
                 }
-                throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+                const error = new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+                error.status = response.status;
+                error.details = data;
+                throw error;
             }
 
             return data;
@@ -67,6 +70,16 @@ class APIClient {
     async post(endpoint, data) {
         return this.request(endpoint, {
             method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+
+    /**
+     * PUT 请求
+     */
+    async put(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'PUT',
             body: JSON.stringify(data)
         });
     }
@@ -116,6 +129,13 @@ class APIClient {
             cid: cid,
             note: note || ''
         });
+    }
+
+    /**
+     * 更新白名单
+     */
+    async updateWhitelist(cidHash, payload) {
+        return this.put(`/api/admin/whitelist/${cidHash}`, payload);
     }
 
     /**

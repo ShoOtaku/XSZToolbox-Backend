@@ -5,6 +5,10 @@
 class App {
     constructor() {
         this.currentPage = 'dashboard';
+        this.usersCache = []; // 缓存用户列表用于查找
+        this.logsCache = []; // 缓存日志列表用于详情显示
+        this.whitelistCache = []; // 缓存白名单列表
+        this.editingWhitelistHash = null;
         this.init();
     }
 
@@ -51,18 +55,45 @@ class App {
         document.getElementById('addWhitelistBtn')?.addEventListener('click', () => this.showAddWhitelistForm());
         document.getElementById('submitWhitelistBtn')?.addEventListener('click', () => this.handleAddWhitelist());
         document.getElementById('cancelWhitelistBtn')?.addEventListener('click', () => this.hideAddWhitelistForm());
+        document.getElementById('findCharacterBtn')?.addEventListener('click', () => this.handleFindCharacter('newCid', 'newNote'));
+        document.getElementById('editFindCharacterBtn')?.addEventListener('click', () => this.handleFindCharacter('editCid', 'editNote'));
         document.getElementById('whitelistTable')?.addEventListener('click', (event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
             const deleteBtn = target.closest('.whitelist-delete-btn');
-            if (!deleteBtn) return;
+            if (deleteBtn) {
+                const cidHash = deleteBtn.dataset.cidHash;
+                this.handleRemoveWhitelist(cidHash);
+                return;
+            }
 
-            const cidHash = deleteBtn.dataset.cidHash;
-            this.handleRemoveWhitelist(cidHash);
+            const row = target.closest('tr[data-index]');
+            if (!row) return;
+            const index = parseInt(row.dataset.index, 10);
+            if (Number.isNaN(index)) return;
+            this.showEditWhitelistModal(index);
         });
 
         // 日志过滤
         document.getElementById('logActionFilter')?.addEventListener('change', () => this.loadLogs());
+
+        // 模态框事件
+        document.getElementById('closeLogModal')?.addEventListener('click', () => this.closeLogDetailModal());
+        document.getElementById('logDetailModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'logDetailModal') {
+                this.closeLogDetailModal();
+            }
+        });
+        document.getElementById('copyCidHashBtn')?.addEventListener('click', () => this.copyCidHash());
+        document.getElementById('closeEditWhitelistModal')?.addEventListener('click', () => this.hideEditWhitelistModal());
+        document.getElementById('cancelEditWhitelistBtn')?.addEventListener('click', () => this.hideEditWhitelistModal());
+        document.getElementById('editWhitelistModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'editWhitelistModal') {
+                this.hideEditWhitelistModal();
+            }
+        });
+        document.getElementById('saveWhitelistBtn')?.addEventListener('click', () => this.handleUpdateWhitelist());
+        document.getElementById('deleteWhitelistBtn')?.addEventListener('click', () => this.handleDeleteFromEditModal());
 
         // 回车登录
         ['username', 'password'].forEach(id => {
@@ -246,7 +277,8 @@ class App {
             'user_verify': '用户验证',
             'admin_login': '管理员登录',
             'whitelist_add': '添加白名单',
-            'whitelist_remove': '移除白名单'
+            'whitelist_remove': '移除白名单',
+            'whitelist_update': '更新白名单'
         };
 
         const html = logs.map(log => `
@@ -270,7 +302,8 @@ class App {
             const response = await api.getWhitelist(100, 0);
 
             if (response.success) {
-                this.renderWhitelistTable(response.whitelist || []);
+                this.whitelistCache = response.whitelist || [];
+                this.renderWhitelistTable(this.whitelistCache);
             }
         } catch (error) {
             this.showToast(error.message || '加载白名单失败', 'error');
@@ -290,13 +323,13 @@ class App {
             return;
         }
 
-        const html = whitelist.map(entry => {
+        const html = whitelist.map((entry, index) => {
             // 确保 cid_hash 存在且有效
             const cidHash = entry.cid_hash || '';
             const canDelete = cidHash.length === 64; // SHA256 哈希长度为 64
 
             return `
-            <tr>
+            <tr class="whitelist-row" data-index="${index}">
                 <td>${entry.cid || '<span style="color:#999;">未记录</span>'}</td>
                 <td>${entry.note || '-'}</td>
                 <td>${this.formatDate(entry.added_at)}</td>
@@ -357,7 +390,11 @@ class App {
                 this.loadWhitelist();
             }
         } catch (error) {
-            this.showToast(error.message || '添加失败', 'error');
+            if (error.status === 409) {
+                this.showToast('白名单已有该角色', 'warning');
+            } else {
+                this.showToast(error.message || '添加失败', 'error');
+            }
         } finally {
             this.showLoading(false);
         }
@@ -371,11 +408,11 @@ class App {
         if (!cidHash || cidHash.length !== 64) {
             this.showToast('无效的 CID 哈希', 'error');
             console.error('无效的 cidHash:', cidHash);
-            return;
+            return false;
         }
 
         if (!confirm(`确定要移除该用户吗？\n\nCID 哈希: ${cidHash}`)) {
-            return;
+            return false;
         }
 
         try {
@@ -386,12 +423,117 @@ class App {
             if (response.success) {
                 this.showToast('移除成功！', 'success');
                 this.loadWhitelist();
+                return true;
             } else {
                 this.showToast(response.message || '移除失败', 'error');
+                return false;
             }
         } catch (error) {
             console.error('删除白名单失败:', error);
             this.showToast(error.message || '移除失败', 'error');
+            return false;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 在编辑模态框中删除白名单
+     */
+    async handleDeleteFromEditModal() {
+        if (!this.editingWhitelistHash) return;
+        const deleted = await this.handleRemoveWhitelist(this.editingWhitelistHash);
+        if (deleted) {
+            this.hideEditWhitelistModal();
+        }
+    }
+
+    /**
+     * 显示编辑白名单模态框
+     */
+    showEditWhitelistModal(index) {
+        const entry = this.whitelistCache[index];
+        const modal = document.getElementById('editWhitelistModal');
+        if (!entry || !modal) return;
+
+        if (!entry.cid_hash || entry.cid_hash.length !== 64) {
+            this.showToast('该条记录缺少有效哈希，无法编辑', 'error');
+            return;
+        }
+
+        this.editingWhitelistHash = entry.cid_hash;
+
+        document.getElementById('editCid').value = entry.cid || '';
+        document.getElementById('editNote').value = entry.note || '';
+        document.getElementById('editCidHash').textContent = entry.cid_hash;
+        document.getElementById('editAddedBy').textContent = entry.added_by || '-';
+        document.getElementById('editAddedAt').textContent = this.formatDate(entry.added_at) || '-';
+
+        modal.classList.add('active');
+    }
+
+    /**
+     * 隐藏编辑白名单模态框
+     */
+    hideEditWhitelistModal() {
+        const modal = document.getElementById('editWhitelistModal');
+        if (!modal) return;
+
+        modal.classList.remove('active');
+        this.editingWhitelistHash = null;
+
+        document.getElementById('editCid').value = '';
+        document.getElementById('editNote').value = '';
+        document.getElementById('editCidHash').textContent = '-';
+        document.getElementById('editAddedBy').textContent = '-';
+        document.getElementById('editAddedAt').textContent = '-';
+    }
+
+    /**
+     * 处理更新白名单
+     */
+    async handleUpdateWhitelist() {
+        if (!this.editingWhitelistHash) {
+            this.showToast('请选择要编辑的白名单', 'warning');
+            return;
+        }
+
+        const cidInput = document.getElementById('editCid');
+        const noteInput = document.getElementById('editNote');
+
+        if (!cidInput || !noteInput) return;
+
+        const cid = cidInput.value.trim();
+        const note = noteInput.value.trim();
+
+        if (!cid) {
+            this.showToast('请输入 CID', 'error');
+            return;
+        }
+
+        if (!/^\d+$/.test(cid)) {
+            this.showToast('CID 必须是数字', 'error');
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.updateWhitelist(this.editingWhitelistHash, {
+                cid,
+                note
+            });
+
+            if (response.success) {
+                this.showToast('更新成功！', 'success');
+                this.hideEditWhitelistModal();
+                this.loadWhitelist();
+            }
+        } catch (error) {
+            if (error.status === 409) {
+                this.showToast('白名单已有该角色', 'warning');
+            } else {
+                this.showToast(error.message || '更新失败', 'error');
+            }
         } finally {
             this.showLoading(false);
         }
@@ -406,12 +548,64 @@ class App {
             const response = await api.getUsers(100, 0);
 
             if (response.success) {
-                this.renderUsersTable(response.users || []);
+                this.usersCache = response.users || []; // 缓存用户列表
+                this.renderUsersTable(this.usersCache);
             }
         } catch (error) {
             this.showToast(error.message || '加载用户列表失败', 'error');
         } finally {
             this.showLoading(false);
+        }
+    }
+
+    /**
+     * 查找角色并自动填充备注
+     */
+    async handleFindCharacter(cidInputId = 'newCid', noteInputId = 'newNote') {
+        const cidInput = document.getElementById(cidInputId);
+        const noteInput = document.getElementById(noteInputId);
+
+        if (!cidInput || !noteInput) return;
+
+        const cid = cidInput.value.trim();
+
+        if (!cid) {
+            this.showToast('请先输入 CID', 'warning');
+            return;
+        }
+
+        // 验证 CID 格式
+        if (!/^\d+$/.test(cid)) {
+            this.showToast('CID 必须是数字', 'error');
+            return;
+        }
+
+        // 如果缓存为空，先加载用户列表
+        if (this.usersCache.length === 0) {
+            try {
+                this.showLoading(true);
+                const response = await api.getUsers(100, 0);
+                if (response.success) {
+                    this.usersCache = response.users || [];
+                }
+            } catch (error) {
+                this.showToast('加载用户列表失败', 'error');
+                this.showLoading(false);
+                return;
+            } finally {
+                this.showLoading(false);
+            }
+        }
+
+        // 在缓存中查找用户
+        const user = this.usersCache.find(u => u.cid === cid);
+
+        if (user && user.character_name && user.world_name) {
+            const note = `${user.character_name}@${user.world_name}`;
+            noteInput.value = note;
+            this.showToast(`✅ 找到角色：${note}`, 'success');
+        } else {
+            this.showToast('未找到该 CID 对应的角色信息', 'warning');
         }
     }
 
@@ -470,7 +664,8 @@ class App {
             const response = await api.getLogs(100, 0, action);
 
             if (response.success) {
-                this.renderLogsTable(response.logs || []);
+                this.logsCache = response.logs || []; // 缓存日志数据
+                this.renderLogsTable(this.logsCache);
             }
         } catch (error) {
             this.showToast(error.message || '加载日志失败', 'error');
@@ -480,7 +675,7 @@ class App {
     }
 
     /**
-     * 渲染日志表格
+     * 渲染日志表格（添加点击事件）
      */
     renderLogsTable(logs) {
         const tbody = document.getElementById('logsTable');
@@ -495,11 +690,12 @@ class App {
             'user_verify': '用户验证',
             'admin_login': '管理员登录',
             'whitelist_add': '添加白名单',
-            'whitelist_remove': '移除白名单'
+            'whitelist_remove': '移除白名单',
+            'whitelist_update': '更新白名单'
         };
 
-        const html = logs.map(log => `
-            <tr>
+        const html = logs.map((log, index) => `
+            <tr class="log-row" data-log-index="${index}" style="cursor: pointer;">
                 <td>${this.formatDate(log.timestamp)}</td>
                 <td>${actionNames[log.action] || log.action}</td>
                 <td class="text-truncate" title="${log.cid_hash || '-'}">${log.cid_hash || '-'}</td>
@@ -509,22 +705,124 @@ class App {
         `).join('');
 
         tbody.innerHTML = html;
+
+        // 绑定点击事件
+        tbody.querySelectorAll('.log-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                const index = parseInt(e.currentTarget.dataset.logIndex);
+                this.showLogDetail(logs[index]);
+            });
+        });
     }
 
     /**
-     * 格式化日期
+     * 显示日志详情模态框
+     */
+    showLogDetail(log) {
+        const actionNames = {
+            'user_submit': '用户提交',
+            'user_verify': '用户验证',
+            'admin_login': '管理员登录',
+            'whitelist_add': '添加白名单',
+            'whitelist_remove': '移除白名单',
+            'whitelist_update': '更新白名单'
+        };
+
+        // 填充模态框数据
+        document.getElementById('modalTimestamp').textContent = this.formatDate(log.timestamp);
+        document.getElementById('modalAction').textContent = actionNames[log.action] || log.action;
+        document.getElementById('modalCidHash').textContent = log.cid_hash || '无';
+        document.getElementById('modalIpAddress').textContent = log.ip_address || '未记录';
+        document.getElementById('modalDetails').textContent = log.details || '无';
+
+        // 查找用户信息
+        let userInfo = '未找到用户信息';
+        if (log.cid_hash && this.usersCache.length > 0) {
+            // 根据 CID 哈希查找用户（需要计算哈希或匹配）
+            // 由于后端可能不返回完整映射，我们只能通过CID查找
+            // 这里简化处理：如果日志包含用户信息则显示
+            const user = this.usersCache.find(u => {
+                // 尝试多种匹配方式
+                return u.cid_hash === log.cid_hash || u.cid === log.cid_hash;
+            });
+
+            if (user && user.character_name && user.world_name) {
+                userInfo = `${user.character_name}@${user.world_name}`;
+            }
+        }
+        document.getElementById('modalUserInfo').textContent = userInfo;
+
+        // 显示模态框
+        document.getElementById('logDetailModal').classList.add('active');
+    }
+
+    /**
+     * 关闭日志详情模态框
+     */
+    closeLogDetailModal() {
+        document.getElementById('logDetailModal').classList.remove('active');
+    }
+
+    /**
+     * 复制 CID 哈希
+     */
+    async copyCidHash() {
+        const cidHash = document.getElementById('modalCidHash').textContent;
+
+        if (cidHash === '无') {
+            this.showToast('没有可复制的内容', 'warning');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(cidHash);
+            this.showToast('✅ CID 哈希已复制到剪贴板', 'success');
+        } catch (error) {
+            // 降级方案：使用旧API
+            const textArea = document.createElement('textarea');
+            textArea.value = cidHash;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                this.showToast('✅ CID 哈希已复制到剪贴板', 'success');
+            } catch (err) {
+                this.showToast('复制失败，请手动复制', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+    }
+
+    /**
+     * 格式化日期（后端时间为 GMT+0，这里统一转换为 GMT+8 展示）
      */
     formatDate(dateString) {
         if (!dateString) return '-';
 
         try {
-            const date = new Date(dateString);
-            return date.toLocaleString('zh-CN', {
+            // 将无时区标记的时间视为 UTC，再转换为 GMT+8（Asia/Shanghai）
+            let normalized = dateString;
+            if (typeof dateString === 'string') {
+                normalized = dateString.replace(' ', 'T');
+                if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)) {
+                    normalized += 'Z';
+                }
+            }
+
+            const date = new Date(normalized);
+            if (Number.isNaN(date.getTime())) return dateString;
+
+            return date.toLocaleString(undefined, {
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: 'Asia/Shanghai'
             });
         } catch {
             return dateString;

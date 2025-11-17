@@ -68,18 +68,36 @@ class WhitelistModel {
    * @returns {boolean} 是否成功
    */
   updateWhitelist(cidHash, updates) {
-    const { cid, note, expiresAt, authorized } = updates;
+    const { cid, note, expiresAt, authorized, cidHash: newCidHash } = updates;
 
-    const result = this.db.prepare(`
-      UPDATE whitelist
-      SET cid = COALESCE(?, cid),
-          note = COALESCE(?, note),
-          expires_at = COALESCE(?, expires_at),
-          authorized = COALESCE(?, authorized)
-      WHERE cid_hash = ?
-    `).run(cid, note, expiresAt, authorized, cidHash);
+    const existing = this.db.prepare(`
+      SELECT id FROM whitelist WHERE cid_hash = ?
+    `).get(cidHash);
 
-    return result.changes > 0;
+    if (!existing) {
+      return false;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE whitelist
+        SET cid = COALESCE(?, cid),
+            cid_hash = COALESCE(?, cid_hash),
+            note = COALESCE(?, note),
+            expires_at = COALESCE(?, expires_at),
+            authorized = COALESCE(?, authorized)
+        WHERE cid_hash = ?
+      `).run(cid, newCidHash, note, expiresAt, authorized, cidHash);
+
+      return true;
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT') {
+        const constraintError = new Error('CID hash already exists');
+        constraintError.code = 'SQLITE_CONSTRAINT';
+        throw constraintError;
+      }
+      throw error;
+    }
   }
 
   /**

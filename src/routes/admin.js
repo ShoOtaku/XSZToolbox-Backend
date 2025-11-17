@@ -49,6 +49,15 @@ router.delete('/whitelist/:hash',
 );
 
 /**
+ * PUT /api/admin/whitelist/:hash
+ * 更新白名单
+ */
+router.put('/whitelist/:hash',
+  auditLog('whitelist_update'),
+  adminController.updateWhitelist
+);
+
+/**
  * GET /api/admin/users
  * 获取所有用户列表
  */

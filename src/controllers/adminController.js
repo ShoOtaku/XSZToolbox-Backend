@@ -12,6 +12,15 @@ const dbManager = require('../models/database');
 const logger = require('../utils/logger');
 const { generateToken } = require('../middleware/auth');
 
+const CID_HASH_SALT = 'XSZToolbox_CID_Salt_2025';
+
+function hashCid(cid) {
+  return crypto.createHash('sha256')
+    .update(CID_HASH_SALT + cid)
+    .digest('hex')
+    .toUpperCase();
+}
+
 /**
  * 管理员登录
  * POST /api/admin/login
@@ -177,13 +186,10 @@ async function addWhitelist(req, res) {
       }
 
       finalCid = cid;
-      // 计算哈希：SHA256(cid + 盐值)
-      finalCidHash = crypto.createHash('sha256')
-        .update(cid + 'XSZToolbox_CID_Salt_2025')
-        .digest('hex');
+      finalCidHash = hashCid(cid);
     } else if (cid_hash && cid_hash.length === 64) {
       // 兼容旧版：只有哈希
-      finalCidHash = cid_hash;
+      finalCidHash = cid_hash.toUpperCase();
     } else {
       return res.status(400).json({
         success: false,
@@ -191,6 +197,8 @@ async function addWhitelist(req, res) {
         message: '请提供 CID 或 CID 哈希'
       });
     }
+
+    const normalizedHash = hash.toUpperCase();
 
     const db = dbManager.getDb();
     const whitelistModel = new WhitelistModel(db);
@@ -221,7 +229,7 @@ async function addWhitelist(req, res) {
       res.status(409).json({
         success: false,
         error: 'Already exists',
-        message: '该用户已在白名单中'
+        message: '白名单已有该角色'
       });
     }
 
@@ -251,21 +259,22 @@ async function removeWhitelist(req, res) {
       });
     }
 
+    const normalizedHash = hash.toUpperCase();
+
     const db = dbManager.getDb();
     const whitelistModel = new WhitelistModel(db);
-
-    const success = whitelistModel.removeFromWhitelist(hash);
+    const success = whitelistModel.removeFromWhitelist(normalizedHash);
 
     const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
 
     if (success) {
-      logger.info(`✅ 移除白名单成功: ${hash} by ${adminIdentifier}`);
+      logger.info(`✅ 移除白名单成功: ${normalizedHash} by ${adminIdentifier}`);
       res.json({
         success: true,
         message: '已从白名单移除'
       });
     } else {
-      logger.warn(`⚠️ 移除白名单失败: ${hash} - 不存在`);
+      logger.warn(`⚠️ 移除白名单失败: ${normalizedHash} - 不存在`);
       res.status(404).json({
         success: false,
         error: 'Not found',
@@ -275,6 +284,96 @@ async function removeWhitelist(req, res) {
 
   } catch (error) {
     logger.error(`❌ 移除白名单失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: '服务器错误'
+    });
+  }
+}
+
+/**
+ * 更新白名单
+ * PUT /api/admin/whitelist/:hash
+ */
+async function updateWhitelist(req, res) {
+  try {
+    const { hash } = req.params;
+    const { cid, note, expires_at, authorized } = req.body;
+
+    if (!hash || hash.length !== 64) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid hash',
+        message: '无效的哈希值'
+      });
+    }
+
+    const normalizedHash = hash.toUpperCase();
+
+    let normalizedCid;
+    let newCidHash;
+
+    if (typeof cid === 'string') {
+      const trimmedCid = cid.trim();
+      if (trimmedCid) {
+        if (!/^\d+$/.test(trimmedCid)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid cid',
+            message: 'CID 必须是数字'
+          });
+        }
+        normalizedCid = trimmedCid;
+        newCidHash = hashCid(trimmedCid);
+      } else {
+        normalizedCid = null;
+        newCidHash = null;
+      }
+    }
+
+    const db = dbManager.getDb();
+    const whitelistModel = new WhitelistModel(db);
+
+    try {
+      const success = whitelistModel.updateWhitelist(normalizedHash, {
+        cid: normalizedCid,
+        cidHash: newCidHash,
+        note: typeof note === 'string' ? note : undefined,
+        expiresAt: expires_at,
+        authorized
+      });
+
+      if (success) {
+        logger.info(`✅ 更新白名单成功: ${normalizedHash}`);
+        return res.json({
+          success: true,
+          message: '白名单已更新',
+          cid: normalizedCid,
+          cid_hash: newCidHash || normalizedHash
+        });
+      }
+
+      logger.warn(`⚠️ 更新白名单失败: ${normalizedHash} - 未找到条目`);
+      return res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: '未找到对应的白名单条目'
+      });
+    } catch (error) {
+      if (error.code === 'SQLITE_CONSTRAINT') {
+        logger.warn(`⚠️ 更新白名单失败: ${normalizedHash} - CID 冲突`);
+        return res.status(409).json({
+          success: false,
+          error: 'Already exists',
+          message: '白名单已有该角色'
+        });
+      }
+      throw error;
+    }
+
+  } catch (error) {
+    logger.error(`❌ 更新白名单失败: ${error.message}`);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -395,6 +494,7 @@ module.exports = {
   getStats,
   addWhitelist,
   removeWhitelist,
+  updateWhitelist,
   getUsers,
   getAllWhitelist,
   getLogs

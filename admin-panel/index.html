@@ -125,7 +125,10 @@
                     <h3>添加新用户到白名单</h3>
                     <div class="form-group">
                         <label for="newCid">CID（角色ID）</label>
-                        <input type="text" id="newCid" placeholder="请输入用户的 CID（数字）">
+                        <div class="input-with-button">
+                            <input type="text" id="newCid" placeholder="请输入用户的 CID（数字）">
+                            <button id="findCharacterBtn" class="btn btn-primary btn-sm">🔍 查找角色</button>
+                        </div>
                         <small>提示：输入用户的明文 CID，系统会自动计算哈希</small>
                     </div>
                     <div class="form-group">
@@ -199,6 +202,7 @@
                             <option value="admin_login">管理员登录</option>
                             <option value="whitelist_add">添加白名单</option>
                             <option value="whitelist_remove">移除白名单</option>
+                            <option value="whitelist_update">更新白名单</option>
                         </select>
                         <button id="refreshLogsBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
                     </div>
@@ -232,6 +236,85 @@
 
     <!-- Toast 通知 -->
     <div id="toast" class="toast"></div>
+
+    <!-- 白名单编辑模态框 -->
+    <div id="editWhitelistModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ 编辑白名单</h2>
+                <button class="modal-close" id="closeEditWhitelistModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editCid">CID（角色ID）</label>
+                    <div class="input-with-button">
+                        <input type="text" id="editCid" placeholder="请输入用户的 CID（数字）">
+                        <button class="btn btn-primary btn-sm" id="editFindCharacterBtn">🔍 查找角色</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="editNote">备注</label>
+                    <input type="text" id="editNote" placeholder="添加备注信息">
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">CID 哈希</div>
+                    <div class="detail-value" id="editCidHash">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">添加者</div>
+                    <div class="detail-value" id="editAddedBy">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">添加时间</div>
+                    <div class="detail-value" id="editAddedAt">-</div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="saveWhitelistBtn">💾 保存</button>
+                    <button class="btn btn-secondary" id="cancelEditWhitelistBtn">取消</button>
+                    <button class="btn btn-danger" id="deleteWhitelistBtn">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 审计日志详情模态框 -->
+    <div id="logDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 审计日志详情</h2>
+                <button class="modal-close" id="closeLogModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-item">
+                    <div class="detail-label">操作时间</div>
+                    <div class="detail-value" id="modalTimestamp">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">操作类型</div>
+                    <div class="detail-value" id="modalAction">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">CID 哈希</div>
+                    <div class="detail-value detail-hash">
+                        <code id="modalCidHash">-</code>
+                        <button class="btn btn-sm btn-secondary" id="copyCidHashBtn">📋 复制</button>
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">IP 地址</div>
+                    <div class="detail-value" id="modalIpAddress">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">用户信息</div>
+                    <div class="detail-value" id="modalUserInfo">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">详情</div>
+                    <div class="detail-value detail-full" id="modalDetails">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 脚本文件 -->
     <script src="js/auth.js"></script>
