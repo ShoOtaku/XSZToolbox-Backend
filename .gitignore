@@ -14,9 +14,8 @@ database/*.db
 database/*.db-shm
 database/*.db-wal
 
-# 日志文件
-logs/*.log
-logs/**/*.log
+# 日志文件（包含敏感审计记录）
+logs/
 
 # IDE
 .vscode/
