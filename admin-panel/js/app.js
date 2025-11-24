@@ -8,6 +8,8 @@ class App {
         this.usersCache = []; // 缓存用户列表用于查找
         this.logsCache = []; // 缓存日志列表用于详情显示
         this.whitelistCache = []; // 缓存白名单列表
+        this.playersCache = []; // 缓存玩家信息
+        this.logsPagination = { limit: 20, offset: 0, total: 0 };
         this.editingWhitelistHash = null;
         this.init();
     }
@@ -74,8 +76,21 @@ class App {
             this.showEditWhitelistModal(index);
         });
 
-        // 日志过滤
-        document.getElementById('logActionFilter')?.addEventListener('change', () => this.loadLogs());
+        // 日志过滤 & 分页
+        document.getElementById('logActionFilter')?.addEventListener('change', () => {
+            this.resetLogsPagination();
+            this.loadLogs();
+        });
+        document.getElementById('logPageSize')?.addEventListener('change', (event) => {
+            const value = parseInt(event.target.value, 10);
+            if (!Number.isNaN(value) && value > 0) {
+                this.logsPagination.limit = value;
+                this.resetLogsPagination();
+                this.loadLogs();
+            }
+        });
+        document.getElementById('logsPrevPage')?.addEventListener('click', () => this.changeLogsPage(-1));
+        document.getElementById('logsNextPage')?.addEventListener('click', () => this.changeLogsPage(1));
 
         // 模态框事件
         document.getElementById('closeLogModal')?.addEventListener('click', () => this.closeLogDetailModal());
@@ -94,6 +109,24 @@ class App {
         });
         document.getElementById('saveWhitelistBtn')?.addEventListener('click', () => this.handleUpdateWhitelist());
         document.getElementById('deleteWhitelistBtn')?.addEventListener('click', () => this.handleDeleteFromEditModal());
+
+        // 活跃度统计刷新
+        document.getElementById('activityRefreshBtn')?.addEventListener('click', () => this.loadActivityStats());
+
+        // 玩家信息
+        document.getElementById('playersRefreshBtn')?.addEventListener('click', () => this.loadPlayers());
+
+        // 角色查询工具
+        document.getElementById('lookupSearchBtn')?.addEventListener('click', () => this.handleLookupSearch());
+        document.getElementById('lookupResetBtn')?.addEventListener('click', () => {
+            document.getElementById('lookupCharacterName').value = '';
+            document.getElementById('lookupCid').value = '';
+            document.getElementById('lookupWorldId').value = '';
+            const tbody = document.getElementById('lookupResultTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="7" class="table-empty">请在上方输入条件后点击查询</td></tr>';
+            }
+        });
 
         // 回车登录
         ['username', 'password'].forEach(id => {
@@ -159,9 +192,233 @@ class App {
             case 'users':
                 this.loadUsers();
                 break;
+            case 'players':
+                this.loadPlayers();
+                break;
             case 'logs':
                 this.loadLogs();
                 break;
+            case 'activity':
+                this.loadActivityStats();
+                break;
+        }
+    }
+
+    /**
+     * 加载活跃度统计页面数据
+     */
+    async loadActivityStats() {
+        const worldIdInput = document.getElementById('activityWorldId');
+        const daysInput = document.getElementById('activityDays');
+        const worldId = worldIdInput && worldIdInput.value ? Number(worldIdInput.value) : undefined;
+        const days = daysInput && daysInput.value ? Number(daysInput.value) : 7;
+
+        try {
+            this.showLoading(true);
+            const resp = await api.getActivityStatistics({ worldId, days });
+
+            if (!resp.success) {
+                this.showToast(resp.message || '获取活跃度统计失败', 'error');
+                return;
+            }
+
+            this.renderActivityStats(resp);
+        } catch (error) {
+            console.error('加载活跃度统计失败', error);
+            this.showToast('加载活跃度统计失败，请稍后重试', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 渲染活跃度统计数据
+     */
+    renderActivityStats(resp) {
+        const leaderboardBody = document.getElementById('activityLeaderboardTable');
+        const dailyBody = document.getElementById('activityDailyTable');
+        const territoryBody = document.getElementById('activityTerritoryTable');
+
+        const { statistics, query } = resp;
+
+        // 排行榜（仅在 worldId 未指定时展示）
+        if (statistics && statistics.leaderboard && Array.isArray(statistics.leaderboard)) {
+            leaderboardBody.innerHTML = '';
+            if (statistics.leaderboard.length === 0) {
+                leaderboardBody.innerHTML = '<tr><td colspan="3" class="table-empty">暂无数据</td></tr>';
+            } else {
+                statistics.leaderboard.forEach((item) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${item.world_id}</td>
+                        <td>${item.total_unique_players}</td>
+                        <td>${item.total_encounters}</td>
+                    `;
+                    leaderboardBody.appendChild(tr);
+                });
+            }
+        } else if (leaderboardBody) {
+            // 当指定 worldId 时，排行榜可以简单显示该服务器汇总
+            leaderboardBody.innerHTML = '';
+            const stat = statistics;
+            if (!stat || stat.total_unique_players === undefined) {
+            leaderboardBody.innerHTML = '<tr><td colspan="3" class="table-empty">暂无数据</td></tr>';
+            } else {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${stat.world_id}</td>
+                    <td>${stat.total_unique_players}</td>
+                    <td>${stat.total_encounters}</td>
+                `;
+                leaderboardBody.appendChild(tr);
+            }
+        }
+
+        // 每日统计
+        if (dailyBody) {
+            dailyBody.innerHTML = '';
+            const dailyStats = statistics && statistics.daily_stats
+                ? statistics.daily_stats
+                : (statistics && statistics.worlds && statistics.worlds.length > 0
+                    ? statistics.worlds[0].daily_stats
+                    : []);
+
+            if (!dailyStats || dailyStats.length === 0) {
+                dailyBody.innerHTML = '<tr><td colspan="3" class="table-empty">暂无每日统计数据</td></tr>';
+            } else {
+                dailyStats.forEach((d) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${d.date}</td>
+                        <td>${d.unique_players}</td>
+                        <td>${d.total_encounters}</td>
+                    `;
+                    dailyBody.appendChild(tr);
+                });
+            }
+        }
+
+        // 热门地图：只有在指定 worldId 时才有
+        if (territoryBody) {
+            territoryBody.innerHTML = '';
+            const territories = statistics && statistics.top_territories ? statistics.top_territories : [];
+
+            if (!query.world_id) {
+                territoryBody.innerHTML = '<tr><td colspan="3" class="table-empty">请在上方输入服务器 ID 后刷新</td></tr>';
+            } else if (territories.length === 0) {
+            territoryBody.innerHTML = '<tr><td colspan="3" class="table-empty">暂无地图统计数据</td></tr>';
+            } else {
+                territories.forEach((t) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${t.territory_id}</td>
+                        <td>${t.unique_players}</td>
+                        <td>${t.encounters}</td>
+                    `;
+                    territoryBody.appendChild(tr);
+                });
+            }
+        }
+    }
+
+    /**
+     * 加载玩家信息总览
+     */
+    async loadPlayers() {
+        const worldInput = document.getElementById('playersWorldId');
+        const searchInput = document.getElementById('playersSearch');
+        const limitInput = document.getElementById('playersLimit');
+
+        const worldValue = worldInput && worldInput.value ? worldInput.value.trim() : '';
+        let worldId;
+        if (worldValue) {
+            worldId = Number(worldValue);
+            if (Number.isNaN(worldId)) {
+                this.showToast('服务器 ID 必须为数字', 'error');
+                return;
+            }
+        }
+
+        let limit = limitInput && limitInput.value ? parseInt(limitInput.value, 10) : 200;
+        if (Number.isNaN(limit) || limit <= 0) limit = 200;
+        limit = Math.min(Math.max(limit, 10), 500);
+
+        const search = searchInput && searchInput.value ? searchInput.value.trim() : '';
+
+        try {
+            this.showLoading(true);
+            const response = await api.getActivityPlayers({
+                worldId,
+                search: search || undefined,
+                limit
+            });
+
+            if (!response.success) {
+                this.showToast(response.message || '加载玩家信息失败', 'error');
+                return;
+            }
+
+            this.playersCache = response.players || [];
+            this.renderPlayersTable(this.playersCache, response.total || this.playersCache.length);
+        } catch (error) {
+            this.showToast(error.message || '加载玩家信息失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 渲染玩家信息表格
+     */
+    renderPlayersTable(players, total = 0) {
+        const tbody = document.getElementById('playersTable');
+        const summary = document.getElementById('playersSummary');
+        if (!tbody) return;
+
+        if (!players || players.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无玩家数据</td></tr>';
+            if (summary) {
+                summary.textContent = `共 ${total || 0} 名玩家`;
+            }
+            return;
+        }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
+
+        const rows = players.map(player => {
+            const cidCell = player.content_id
+                ? `<span class="table-pill table-pill--id">${player.content_id}</span>`
+                : placeholder('-');
+            const nameCell = player.character_name
+                ? `<span class="table-title">${player.character_name}</span>`
+                : placeholder('-');
+            const worldCell = player.world_id || player.world_name
+                ? `<div class="table-stack">
+                        <span class="table-title">${player.world_id ?? '-'}</span>
+                        ${player.world_name ? `<span class="table-meta">${player.world_name}</span>` : ''}
+                   </div>`
+                : placeholder('-');
+
+            return `
+            <tr>
+                <td>${cidCell}</td>
+                <td>${nameCell}</td>
+                <td>${worldCell}</td>
+                <td class="table-cell--metric"><span class="table-metric">${player.encounter_count || 0}</span></td>
+                <td class="table-cell--metric"><span class="table-metric">${player.unique_uploaders || 0}</span></td>
+                <td>${formatDateCell(player.first_seen)}</td>
+                <td>${formatDateCell(player.last_seen)}</td>
+            </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = rows;
+        if (summary) {
+            summary.textContent = `共 ${total} 名玩家，显示 ${players.length} 条`;
         }
     }
 
@@ -317,27 +574,44 @@ class App {
      */
     renderWhitelistTable(whitelist) {
         const tbody = document.getElementById('whitelistTable');
+        if (!tbody) return;
 
         if (whitelist.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无白名单</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="table-empty">暂无白名单</td></tr>';
             return;
         }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
 
         const html = whitelist.map((entry, index) => {
             // 确保 cid_hash 存在且有效
             const cidHash = entry.cid_hash || '';
             const canDelete = cidHash.length === 64; // SHA256 哈希长度为 64
+            const cidDisplay = entry.cid
+                ? `<span class="table-pill table-pill--id">${entry.cid}</span>`
+                : placeholder('未记录');
+            const noteDisplay = entry.note
+                ? `<div class="table-note">${entry.note}</div>`
+                : placeholder('暂无备注');
+            const addedByDisplay = entry.added_by
+                ? `<span class="table-meta table-meta--strong">${entry.added_by}</span>`
+                : placeholder('-');
+            const actionContent = canDelete
+                ? `<button class="btn btn-danger btn-sm whitelist-delete-btn" data-cid-hash="${cidHash}">删除</button>`
+                : placeholder('无法删除');
 
             return `
-            <tr class="whitelist-row" data-index="${index}">
-                <td>${entry.cid || '<span style="color:#999;">未记录</span>'}</td>
-                <td>${entry.note || '-'}</td>
-                <td>${this.formatDate(entry.added_at)}</td>
-                <td>${entry.added_by || '-'}</td>
-                <td>
-                    ${canDelete
-                        ? `<button class="btn btn-danger btn-sm whitelist-delete-btn" data-cid-hash="${cidHash}">删除</button>`
-                        : '<span style="color:#999;">无法删除</span>'}
+            <tr class="whitelist-row table-row--clickable" data-index="${index}">
+                <td>${cidDisplay}</td>
+                <td>${noteDisplay}</td>
+                <td>${formatDateCell(entry.added_at)}</td>
+                <td>${addedByDisplay}</td>
+                <td class="table-actions">
+                    ${actionContent}
                 </td>
             </tr>
             `;
@@ -545,7 +819,7 @@ class App {
     async loadUsers() {
         try {
             this.showLoading(true);
-            const response = await api.getUsers(100, 0);
+            const response = await api.getUsers({ limit: 100, offset: 0 });
 
             if (response.success) {
                 this.usersCache = response.users || []; // 缓存用户列表
@@ -556,6 +830,99 @@ class App {
         } finally {
             this.showLoading(false);
         }
+    }
+
+    /**
+     * 处理用户查询（通过角色名或 CID）
+     */
+    async handleLookupSearch() {
+        const nameInput = document.getElementById('lookupCharacterName');
+        const cidInput = document.getElementById('lookupCid');
+        const worldInput = document.getElementById('lookupWorldId');
+
+        const characterName = nameInput ? nameInput.value.trim() : '';
+        const cid = cidInput ? cidInput.value.trim() : '';
+        const worldIdValue = worldInput ? worldInput.value.trim() : '';
+        let worldId;
+        if (worldIdValue) {
+            worldId = Number(worldIdValue);
+            if (Number.isNaN(worldId)) {
+                this.showToast('服务器 ID 必须为数字', 'error');
+                return;
+            }
+        }
+
+        if (!characterName && !cid) {
+            this.showToast('请至少输入角色名或 CID 之一进行查询', 'warning');
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.getActivityPlayers({
+                worldId,
+                search: characterName || undefined,
+                cid: cid || undefined,
+                limit: 100
+            });
+
+            if (response.success) {
+                const players = response.players || [];
+                this.renderLookupTable(players);
+
+                if (players.length === 0) {
+                    this.showToast('未找到匹配的玩家', 'info');
+                } else {
+                    this.showToast(`找到 ${players.length} 条匹配记录`, 'success');
+                }
+            } else {
+                this.showToast(response.message || '查询失败', 'error');
+            }
+        } catch (error) {
+            this.showToast(error.message || '查询失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 渲染角色查询结果表格
+     */
+    renderLookupTable(users) {
+        const tbody = document.getElementById('lookupResultTable');
+        if (!tbody) return;
+
+        if (!users || users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="table-empty">未找到匹配的玩家</td></tr>';
+            return;
+        }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
+
+        const html = users.map(user => `
+            <tr>
+                <td>${user.content_id ? `<span class="table-pill table-pill--id">${user.content_id}</span>` : placeholder('-')}</td>
+                <td>${user.character_name ? `<span class="table-title">${user.character_name}</span>` : placeholder('-')}</td>
+                <td>
+                    ${(user.world_id || user.world_name)
+                        ? `<div class="table-stack">
+                                <span class="table-title">${user.world_id || '-'}</span>
+                                ${user.world_name ? `<span class="table-meta">${user.world_name}</span>` : ''}
+                           </div>`
+                        : placeholder('-')}
+                </td>
+                <td class="table-cell--metric"><span class="table-metric">${user.encounter_count || 0}</span></td>
+                <td class="table-cell--metric"><span class="table-metric">${user.unique_uploaders || 0}</span></td>
+                <td>${formatDateCell(user.first_seen)}</td>
+                <td>${formatDateCell(user.last_seen)}</td>
+            </tr>
+        `).join('');
+
+        tbody.innerHTML = html;
     }
 
     /**
@@ -614,38 +981,53 @@ class App {
      */
     renderUsersTable(users) {
         const tbody = document.getElementById('usersTable');
+        if (!tbody) return;
 
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center">暂无用户</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无用户</td></tr>';
             return;
         }
 
-        // 调试日志：检查返回的用户数据
-        console.log('用户列表数据:', users);
-        console.log('第一个用户的 qq_info:', users[0]?.qq_info);
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
 
         const html = users.map(user => {
             // 格式化 QQ 号显示
-            let qqDisplay = '-';
+            let qqDisplay = placeholder('-');
             if (user.qq_info) {
                 // 如果包含多个QQ号（用 + 分隔），进行格式化
                 if (user.qq_info.includes('+')) {
                     const qqList = user.qq_info.split('+').map(qq => qq.trim()).filter(qq => qq);
-                    qqDisplay = `<div class="qq-list" title="${user.qq_info}">${qqList.join(' + ')}</div>`;
+                    qqDisplay = `
+                        <div class="table-stack" title="${user.qq_info}">
+                            <span class="table-title">${qqList.join(' + ')}</span>
+                            <span class="table-meta">共 ${qqList.length} 个 QQ</span>
+                        </div>
+                    `;
                 } else {
-                    qqDisplay = user.qq_info;
+                    qqDisplay = `<span class="table-title">${user.qq_info}</span>`;
                 }
             }
 
             return `
             <tr>
-                <td>${user.cid || '<span style="color:#999;">未记录</span>'}</td>
-                <td>${user.character_name || '-'}</td>
-                <td>${user.world_name || '-'}</td>
+                <td>${user.cid ? `<span class="table-pill table-pill--id">${user.cid}</span>` : placeholder('未记录')}</td>
+                <td>${user.character_name ? `<span class="table-title">${user.character_name}</span>` : placeholder('-')}</td>
+                <td>
+                    ${(user.world_name || user.world_id)
+                        ? `<div class="table-stack">
+                                <span class="table-title">${user.world_name || '未知服务器'}</span>
+                                ${user.world_id ? `<span class="table-meta">ID: ${user.world_id}</span>` : ''}
+                           </div>`
+                        : placeholder('-')}
+                </td>
                 <td class="qq-cell">${qqDisplay}</td>
-                <td>${this.formatDate(user.first_login)}</td>
-                <td>${this.formatDate(user.last_login)}</td>
-                <td>${user.login_count || 0}</td>
+                <td>${formatDateCell(user.first_login)}</td>
+                <td>${formatDateCell(user.last_login)}</td>
+                <td><span class="table-pill table-pill--count">${user.login_count || 0} 次</span></td>
             </tr>
             `;
         }).join('');
@@ -656,16 +1038,48 @@ class App {
     /**
      * 加载审计日志
      */
-    async loadLogs() {
-        const action = document.getElementById('logActionFilter').value;
+    async loadLogs(options = {}) {
+        const actionSelect = document.getElementById('logActionFilter');
+        const action = actionSelect ? actionSelect.value : '';
+        if (options.resetOffset) {
+            this.resetLogsPagination();
+        }
+
+        const pageSizeSelect = document.getElementById('logPageSize');
+        if (pageSizeSelect) {
+            const size = parseInt(pageSizeSelect.value, 10);
+            if (!Number.isNaN(size) && size > 0) {
+                this.logsPagination.limit = size;
+            }
+        }
+
+        const { limit } = this.logsPagination;
+        let { offset } = this.logsPagination;
 
         try {
             this.showLoading(true);
-            const response = await api.getLogs(100, 0, action);
+            const response = await api.getLogs(limit, offset, action);
 
             if (response.success) {
-                this.logsCache = response.logs || []; // 缓存日志数据
+                const total = typeof response.total === 'number' ? response.total : 0;
+                const logs = response.logs || [];
+
+                // 如果当前页没有数据但仍有总数，自动回退到最后一页
+                if (total > 0 && logs.length === 0 && offset >= total) {
+                    const lastPageOffset = Math.max(0, (Math.ceil(total / limit) - 1) * limit);
+                    if (lastPageOffset !== offset) {
+                        this.logsPagination.offset = lastPageOffset;
+                        await this.loadLogs();
+                        return;
+                    }
+                }
+
+                this.logsCache = logs; // 缓存日志数据
+                this.logsPagination.total = total;
+                this.logsPagination.limit = response.limit || limit;
+                this.logsPagination.offset = response.offset ?? offset;
                 this.renderLogsTable(this.logsCache);
+                this.updateLogsPaginationUI();
             }
         } catch (error) {
             this.showToast(error.message || '加载日志失败', 'error');
@@ -679,9 +1093,10 @@ class App {
      */
     renderLogsTable(logs) {
         const tbody = document.getElementById('logsTable');
+        if (!tbody) return;
 
-        if (logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无日志</td></tr>';
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="table-empty">暂无日志</td></tr>';
             return;
         }
 
@@ -693,14 +1108,58 @@ class App {
             'whitelist_remove': '移除白名单',
             'whitelist_update': '更新白名单'
         };
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const resolveCharacter = (log) => {
+            // 优先使用日志自带的角色信息
+            const character = log.character_name || log.character;
+            const world = log.world_name || log.world_id;
+            if (character && world) return `${character}@${world}`;
+            if (character) return character;
+
+            // 尝试通过缓存的用户列表匹配
+            if (log.cid_hash && this.usersCache && this.usersCache.length > 0) {
+                const matched = this.usersCache.find(u => u.cid_hash === log.cid_hash || u.cid === log.cid_hash);
+                if (matched && matched.character_name && (matched.world_name || matched.world_id)) {
+                    return `${matched.character_name}@${matched.world_name || matched.world_id}`;
+                }
+            }
+            return null;
+        };
 
         const html = logs.map((log, index) => `
-            <tr class="log-row" data-log-index="${index}" style="cursor: pointer;">
-                <td>${this.formatDate(log.timestamp)}</td>
-                <td>${actionNames[log.action] || log.action}</td>
-                <td class="text-truncate" title="${log.cid_hash || '-'}">${log.cid_hash || '-'}</td>
-                <td>${log.ip_address || '-'}</td>
-                <td class="text-truncate" title="${log.details || '-'}">${log.details || '-'}</td>
+            <tr class="log-row table-row--clickable" data-log-index="${index}">
+                <td>
+                    ${(() => {
+                        const formatted = this.formatDate(log.timestamp);
+                        if (formatted === '-') return placeholder('-');
+                        return `
+                            <div class="table-stack">
+                                <span class="table-title">${formatted}</span>
+                                ${log.username ? `<span class="table-meta">操作者：${log.username}</span>` : ''}
+                            </div>
+                        `;
+                    })()}
+                </td>
+                <td>${log.action ? `<span class="table-pill table-pill--action">${actionNames[log.action] || log.action}</span>` : placeholder('-')}</td>
+                <td>
+                    ${(() => {
+                        const label = resolveCharacter(log);
+                        if (label) {
+                            return `<span class="table-title text-truncate" title="${label}">${label}</span>`;
+                        }
+                        return log.cid_hash
+                            ? `<div class="text-truncate" title="${log.cid_hash}"><span class="table-code">${log.cid_hash}</span></div>`
+                            : placeholder('-');
+                    })()}
+                </td>
+                <td>${log.ip_address ? `<span class="table-meta table-meta--strong">${log.ip_address}</span>` : placeholder('-')}</td>
+                <td>
+                    ${log.details
+                        ? `<div class="table-stack">
+                                <span class="table-title text-truncate" title="${log.details}">${log.details}</span>
+                           </div>`
+                        : placeholder('-')}
+                </td>
             </tr>
         `).join('');
 
@@ -713,6 +1172,85 @@ class App {
                 this.showLogDetail(logs[index]);
             });
         });
+    }
+
+    /**
+     * 更新日志分页信息与按钮状态
+     */
+    updateLogsPaginationUI() {
+        const info = document.getElementById('logsPaginationInfo');
+        const prevBtn = document.getElementById('logsPrevPage');
+        const nextBtn = document.getElementById('logsNextPage');
+        const pageSizeSelect = document.getElementById('logPageSize');
+
+        const logsLength = this.logsCache ? this.logsCache.length : 0;
+        const { limit, offset } = this.logsPagination;
+        const totalRaw = this.logsPagination.total;
+        const totalCount = (typeof totalRaw === 'number' && totalRaw > 0) ? totalRaw : logsLength;
+        const hasRows = logsLength > 0;
+
+        if (pageSizeSelect && pageSizeSelect.value !== String(limit)) {
+            pageSizeSelect.value = String(limit);
+        }
+
+        if (info) {
+            if (totalCount > 0 && hasRows) {
+                const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+                const currentPage = Math.min(totalPages, Math.floor(offset / limit) + 1);
+                const start = Math.min(totalCount, offset + 1);
+                const end = Math.min(totalCount, offset + logsLength);
+                info.textContent = `第 ${currentPage} / ${totalPages} 页 · 显示 ${start}-${end} 条 · 共 ${totalCount} 条`;
+            } else if (totalCount > 0) {
+                info.textContent = `共 ${totalCount} 条记录`;
+            } else {
+                info.textContent = '暂无日志记录';
+            }
+        }
+
+        if (prevBtn) {
+            prevBtn.disabled = offset <= 0 || !hasRows;
+        }
+        if (nextBtn) {
+            if (!hasRows || totalCount === 0) {
+                nextBtn.disabled = true;
+            } else {
+                nextBtn.disabled = offset + logsLength >= totalCount;
+            }
+        }
+    }
+
+    /**
+     * 翻页
+     */
+    changeLogsPage(direction) {
+        if (!direction) return;
+        const { limit } = this.logsPagination;
+        let { offset } = this.logsPagination;
+        const totalRaw = this.logsPagination.total;
+        const totalCount = (typeof totalRaw === 'number' && totalRaw > 0)
+            ? totalRaw
+            : offset + (this.logsCache ? this.logsCache.length : 0);
+
+        if (direction < 0 && offset <= 0) return;
+
+        let newOffset = offset + direction * limit;
+        if (newOffset < 0) newOffset = 0;
+
+        if (totalCount > 0) {
+            const maxOffset = Math.max(0, (Math.ceil(totalCount / limit) - 1) * limit);
+            if (newOffset > maxOffset) newOffset = maxOffset;
+        }
+
+        if (newOffset === offset) return;
+        this.logsPagination.offset = newOffset;
+        this.loadLogs();
+    }
+
+    /**
+     * 重置日志分页
+     */
+    resetLogsPagination() {
+        this.logsPagination.offset = 0;
     }
 
     /**

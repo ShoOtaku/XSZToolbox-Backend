@@ -112,6 +112,42 @@ class APIClient {
         return this.get('/api/admin/stats');
     }
 
+    /**
+     * 获取服务器活跃度统计
+     * @param {Object} params
+     * @param {number} [params.worldId]
+     * @param {number} [params.days]
+     * @param {string} [params.startDate]
+     * @param {string} [params.endDate]
+     */
+    async getActivityStatistics(params = {}) {
+        const query = new URLSearchParams();
+        if (params.worldId) query.set('world_id', params.worldId);
+        if (params.days) query.set('days', params.days);
+        if (params.startDate) query.set('start_date', params.startDate);
+        if (params.endDate) query.set('end_date', params.endDate);
+
+        const qs = query.toString();
+        const endpoint = qs ? `/api/activity/statistics?${qs}` : '/api/activity/statistics';
+        return this.get(endpoint);
+    }
+
+    /**
+     * 获取玩家信息列表
+     */
+    async getActivityPlayers(params = {}) {
+        const query = new URLSearchParams();
+        if (params.worldId) query.set('world_id', params.worldId);
+        if (params.search) query.set('search', params.search);
+        if (params.cid) query.set('cid', params.cid);
+        if (params.limit) query.set('limit', params.limit);
+        if (params.offset) query.set('offset', params.offset);
+
+        const qs = query.toString();
+        const endpoint = qs ? `/api/activity/players?${qs}` : '/api/activity/players';
+        return this.get(endpoint);
+    }
+
     // ==================== 白名单接口 ====================
 
     /**
@@ -150,8 +186,16 @@ class APIClient {
     /**
      * 获取所有用户
      */
-    async getUsers(limit = 100, offset = 0) {
-        return this.get(`/api/admin/users?limit=${limit}&offset=${offset}`);
+    async getUsers({ limit = 100, offset = 0, searchType, characterName, cid, worldName } = {}) {
+        const params = new URLSearchParams();
+        params.set('limit', limit);
+        params.set('offset', offset);
+        if (searchType) params.set('searchType', searchType);
+        if (characterName) params.set('characterName', characterName);
+        if (cid) params.set('cid', cid);
+        if (worldName) params.set('worldName', worldName);
+
+        return this.get(`/api/admin/users?${params.toString()}`);
     }
 
     // ==================== 日志接口 ====================

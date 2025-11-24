@@ -132,6 +132,47 @@ class UserModel {
       LIMIT ?
     `).all(limit);
   }
+
+  /**
+   * 根据角色名模糊查询用户（可选按服务器名过滤）
+   * @param {string} characterName
+   * @param {string} [worldName]
+   */
+  findByCharacterName(characterName, worldName) {
+    const likeName = `%${characterName}%`;
+    if (worldName) {
+      return this.db.prepare(`
+        SELECT cid, cid_hash, character_name, world_name
+        FROM users
+        WHERE character_name LIKE ?
+          AND world_name = ?
+        ORDER BY last_login DESC
+        LIMIT 50
+      `).all(likeName, worldName);
+    }
+
+    return this.db.prepare(`
+      SELECT cid, cid_hash, character_name, world_name
+      FROM users
+      WHERE character_name LIKE ?
+      ORDER BY last_login DESC
+      LIMIT 50
+    `).all(likeName);
+  }
+
+  /**
+   * 根据明文 CID 查询用户
+   * @param {string} cid
+   */
+  findByCid(cid) {
+    return this.db.prepare(`
+      SELECT cid, cid_hash, character_name, world_name
+      FROM users
+      WHERE cid = ?
+      ORDER BY last_login DESC
+      LIMIT 50
+    `).all(cid);
+  }
 }
 
 module.exports = UserModel;

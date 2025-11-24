@@ -52,9 +52,21 @@
                     <span class="icon">👥</span>
                     <span>用户列表</span>
                 </a>
+                <a href="#" data-page="lookup" class="nav-item">
+                    <span class="icon">🔍</span>
+                    <span>角色查询</span>
+                </a>
+                <a href="#" data-page="players" class="nav-item">
+                    <span class="icon">🧙</span>
+                    <span>玩家信息</span>
+                </a>
                 <a href="#" data-page="logs" class="nav-item">
                     <span class="icon">📝</span>
                     <span>审计日志</span>
+                </a>
+                <a href="#" data-page="activity" class="nav-item">
+                    <span class="icon">📈</span>
+                    <span>活跃度统计</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
@@ -155,7 +167,7 @@
                         </thead>
                         <tbody id="whitelistTable">
                             <tr>
-                                <td colspan="5" class="text-center">加载中...</td>
+                                <td colspan="5" class="table-empty">加载中...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -183,10 +195,118 @@
                         </thead>
                         <tbody id="usersTable">
                             <tr>
-                                <td colspan="7" class="text-center">加载中...</td>
+                                <td colspan="7" class="table-empty">加载中...</td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- 角色查询工具 -->
+            <div id="lookupContent" class="content-section">
+                <div class="content-header">
+                    <h1>🔍 角色查询工具</h1>
+                    <p>通过角色名或 CID 查询众包上传的玩家数据</p>
+                </div>
+                <div class="form-card">
+                    <div class="form-group">
+                        <label for="lookupCharacterName">角色名</label>
+                        <input type="text" id="lookupCharacterName" placeholder="例如：某某某">
+                    </div>
+                    <div class="form-group">
+                        <label for="lookupCid">CID（角色 ID）</label>
+                        <input type="text" id="lookupCid" placeholder="例如：1234567890123">
+                    </div>
+                    <div class="form-group">
+                        <label for="lookupWorldId">服务器 ID（可选）</label>
+                        <input type="number" id="lookupWorldId" placeholder="例如：1167">
+                    </div>
+                    <div class="form-actions">
+                        <button id="lookupSearchBtn" class="btn btn-primary">🔍 查询</button>
+                        <button id="lookupResetBtn" class="btn btn-secondary">重置</button>
+                    </div>
+                    <small>提示：可以只填角色名，或只填 CID；角色名支持模糊匹配。</small>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>CID</th>
+                                <th>角色名</th>
+                                <th>服务器 ID</th>
+                                <th>遭遇次数</th>
+                                <th>上传者数</th>
+                                <th>首次上传</th>
+                                <th>最后上传</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lookupResultTable">
+                            <tr>
+                                <td colspan="7" class="table-empty">请在上方输入条件后点击查询</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 玩家信息总览 -->
+            <div id="playersContent" class="content-section">
+                <div class="content-header">
+                    <h1>🧙 玩家信息总览</h1>
+                    <div class="filter-group">
+                        <div class="filter-field">
+                            <label class="filter-field__label" for="playersWorldId">服务器 ID</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🛰️</span>
+                                <input type="number" id="playersWorldId" placeholder="全部服务器">
+                            </div>
+                            <span class="filter-field__hint">留空表示全部服务器</span>
+                        </div>
+                        <div class="filter-field filter-field--wide">
+                            <label class="filter-field__label" for="playersSearch">角色名</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🧙</span>
+                                <input type="text" id="playersSearch" placeholder="模糊搜索角色名">
+                            </div>
+                            <span class="filter-field__hint">支持模糊匹配</span>
+                        </div>
+                        <div class="filter-field filter-field--compact">
+                            <label class="filter-field__label" for="playersLimit">显示数量</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🔢</span>
+                                <input type="number" id="playersLimit" value="200" min="10" max="500">
+                            </div>
+                            <span class="filter-field__hint">10 - 500</span>
+                        </div>
+                        <div class="filter-field filter-field--button">
+                            <label class="filter-field__label">&nbsp;</label>
+                            <button id="playersRefreshBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>CID</th>
+                                <th>角色名</th>
+                                <th>服务器 ID</th>
+                                <th>遭遇次数</th>
+                                <th>上传者数</th>
+                                <th>首次上传</th>
+                                <th>最后出现</th>
+                            </tr>
+                        </thead>
+                        <tbody id="playersTable">
+                            <tr>
+                                <td colspan="7" class="table-empty">点击上方刷新按钮加载数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span id="playersSummary">共 0 名玩家</span>
+                    </div>
                 </div>
             </div>
 
@@ -195,16 +315,38 @@
                 <div class="content-header">
                     <h1>📝 审计日志</h1>
                     <div class="filter-group">
-                        <select id="logActionFilter">
-                            <option value="">所有操作</option>
-                            <option value="user_submit">用户提交</option>
-                            <option value="user_verify">用户验证</option>
-                            <option value="admin_login">管理员登录</option>
-                            <option value="whitelist_add">添加白名单</option>
-                            <option value="whitelist_remove">移除白名单</option>
-                            <option value="whitelist_update">更新白名单</option>
-                        </select>
-                        <button id="refreshLogsBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                        <div class="filter-field filter-field--wide">
+                            <label class="filter-field__label" for="logActionFilter">操作类型</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🎯</span>
+                                <select id="logActionFilter">
+                                    <option value="">所有操作</option>
+                                    <option value="user_submit">用户提交</option>
+                                    <option value="user_verify">用户验证</option>
+                                    <option value="admin_login">管理员登录</option>
+                                    <option value="whitelist_add">添加白名单</option>
+                                    <option value="whitelist_remove">移除白名单</option>
+                                    <option value="whitelist_update">更新白名单</option>
+                                </select>
+                            </div>
+                            <span class="filter-field__hint">筛选指定类型日志</span>
+                        </div>
+                        <div class="filter-field filter-field--compact">
+                            <label class="filter-field__label" for="logPageSize">每页数量</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">📄</span>
+                                <select id="logPageSize">
+                                    <option value="10">10 条/页</option>
+                                    <option value="20" selected>20 条/页</option>
+                                    <option value="50">50 条/页</option>
+                                    <option value="100">100 条/页</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-field filter-field--button">
+                            <label class="filter-field__label">&nbsp;</label>
+                            <button id="refreshLogsBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                        </div>
                     </div>
                 </div>
                 <div class="table-container">
@@ -213,17 +355,116 @@
                             <tr>
                                 <th>时间</th>
                                 <th>操作</th>
-                                <th>CID 哈希</th>
+                                <th>角色</th>
                                 <th>IP 地址</th>
                                 <th>详情</th>
                             </tr>
                         </thead>
                         <tbody id="logsTable">
                             <tr>
-                                <td colspan="5" class="text-center">加载中...</td>
+                                <td colspan="5" class="table-empty">加载中...</td>
                             </tr>
                         </tbody>
                     </table>
+                    <div class="table-footer">
+                        <div id="logsPaginationInfo" class="pagination-info">加载中...</div>
+                        <div class="pagination-controls">
+                            <button id="logsPrevPage" class="btn btn-secondary btn-sm" disabled>⬅️ 上一页</button>
+                            <button id="logsNextPage" class="btn btn-secondary btn-sm" disabled>➡️ 下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 活跃度统计 -->
+            <div id="activityContent" class="content-section">
+                <div class="content-header">
+                    <h1>📈 服务器活跃度统计</h1>
+                    <div class="filter-group">
+                        <div class="filter-field">
+                            <label class="filter-field__label" for="activityWorldId">服务器 ID</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🛰️</span>
+                                <input type="number" id="activityWorldId" placeholder="全部服务器">
+                            </div>
+                            <span class="filter-field__hint">留空查看所有服务器</span>
+                        </div>
+                        <div class="filter-field filter-field--compact">
+                            <label class="filter-field__label" for="activityDays">最近天数</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">📅</span>
+                                <input type="number" id="activityDays" value="7" min="1" max="30">
+                            </div>
+                            <span class="filter-field__hint">范围 1 - 30 天</span>
+                        </div>
+                        <div class="filter-field filter-field--button">
+                            <label class="filter-field__label">&nbsp;</label>
+                            <button id="activityRefreshBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-row">
+                    <div class="dashboard-card">
+                        <h3>🏆 服务器排行榜（按不重复玩家数）</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>服务器 ID</th>
+                                        <th>不重复玩家数</th>
+                                        <th>总遭遇次数</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityLeaderboardTable">
+                                    <tr>
+                                        <td colspan="3" class="table-empty">暂无数据</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>📅 每日统计</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>日期</th>
+                                        <th>不重复玩家数</th>
+                                        <th>总遭遇次数</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityDailyTable">
+                                    <tr>
+                                        <td colspan="3" class="table-empty">请选择服务器或刷新数据</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-row">
+                    <div class="dashboard-card">
+                        <h3>🔥 热门地图（最近 N 天）</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>地图 ID</th>
+                                        <th>不重复玩家数</th>
+                                        <th>遭遇次数</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityTerritoryTable">
+                                    <tr>
+                                        <td colspan="3" class="table-empty">请选择服务器 ID</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>

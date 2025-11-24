@@ -103,6 +103,60 @@ class DatabaseManager {
       );
     `);
 
+    // 活跃度收集相关表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS encounter_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content_id INTEGER NOT NULL,
+        character_name TEXT NOT NULL,
+        world_id INTEGER NOT NULL,
+        territory_id INTEGER NOT NULL,
+        encounter_time DATETIME NOT NULL,
+        uploader_cid INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS player_activity_summary (
+        content_id INTEGER PRIMARY KEY,
+        character_name TEXT NOT NULL,
+        world_id INTEGER NOT NULL,
+        last_seen DATETIME NOT NULL,
+        encounter_count INTEGER DEFAULT 1,
+        unique_uploaders INTEGER DEFAULT 1,
+        first_seen DATETIME NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS world_statistics (
+        world_id INTEGER NOT NULL,
+        stat_date TEXT NOT NULL,
+        unique_players INTEGER DEFAULT 0,
+        total_encounters INTEGER DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (world_id, stat_date)
+      );
+    `);
+
+    // 索引：提高活跃度相关查询性能
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_encounter_records_content_id ON encounter_records(content_id);
+      CREATE INDEX IF NOT EXISTS idx_encounter_records_world_id ON encounter_records(world_id);
+      CREATE INDEX IF NOT EXISTS idx_encounter_records_encounter_time ON encounter_records(encounter_time);
+      CREATE INDEX IF NOT EXISTS idx_encounter_records_uploader_cid ON encounter_records(uploader_cid);
+      CREATE INDEX IF NOT EXISTS idx_encounter_records_territory_id ON encounter_records(territory_id);
+
+      CREATE INDEX IF NOT EXISTS idx_player_activity_world_id ON player_activity_summary(world_id);
+      CREATE INDEX IF NOT EXISTS idx_player_activity_last_seen ON player_activity_summary(last_seen);
+      CREATE INDEX IF NOT EXISTS idx_player_activity_encounter_count ON player_activity_summary(encounter_count);
+
+      CREATE INDEX IF NOT EXISTS idx_world_statistics_stat_date ON world_statistics(stat_date);
+      CREATE INDEX IF NOT EXISTS idx_world_statistics_unique_players ON world_statistics(unique_players);
+    `);
+
     // 数据库迁移：为现有表添加新列（如果不存在）
     this.migrateDatabase();
 

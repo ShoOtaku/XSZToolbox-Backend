@@ -17,6 +17,7 @@ const { requestLogger } = require('./middleware/audit');
 // 导入路由
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const activityRoutes = require('./routes/activity');
 
 // 创建 Express 应用
 const app = express();
@@ -58,6 +59,9 @@ app.use('/admin', express.static(adminPanelPath));
 
 // 公共 API
 app.use('/api', apiRoutes);
+app.use('/api', activityRoutes);
+// 兼容旧客户端使用的 /api/api 前缀
+app.use('/api/api', activityRoutes);
 
 // 管理员 API
 app.use('/api/admin', adminRoutes);

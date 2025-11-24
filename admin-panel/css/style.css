@@ -442,72 +442,84 @@ body {
 
 /* ==================== 表格 ==================== */
 .table-container {
-    background: white;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+    background: linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
+    border-radius: 18px;
+    padding: 24px;
+    border: 1px solid rgba(74, 144, 226, 0.12);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
     overflow-x: auto;
     overflow-y: hidden;
+    position: relative;
 }
 
 .data-table {
     width: 100%;
-    border-collapse: collapse;
-}
-
-.data-table thead {
-    background: var(--light-bg);
+    border-collapse: separate;
+    border-spacing: 0 12px;
+    min-width: 720px;
 }
 
 .data-table th {
-    padding: 16px;
+    padding: 18px 20px;
     text-align: left;
     font-weight: 600;
-    color: var(--text-color);
-    border-bottom: 2px solid var(--border-color);
+    color: var(--dark-bg);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
 }
 
 .data-table thead th {
     position: sticky;
     top: 0;
-    background: var(--light-bg);
+    background: rgba(246, 248, 251, 0.95);
     z-index: 2;
+    box-shadow: inset 0 -1px 0 rgba(74, 144, 226, 0.18);
+}
+
+.data-table thead th:first-child {
+    border-top-left-radius: 14px;
+    border-bottom-left-radius: 14px;
+}
+
+.data-table thead th:last-child {
+    border-top-right-radius: 14px;
+    border-bottom-right-radius: 14px;
 }
 
 .data-table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 18px 20px;
     color: var(--text-color);
+    border: none;
+    background: transparent;
 }
 
 .data-table tbody tr {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
     position: relative;
-}
-
-.data-table tbody tr::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 4px;
-    height: 100%;
-    background: linear-gradient(135deg, var(--primary-color), #667eea);
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
+    box-shadow: 0 10px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 16px;
 }
 
 .data-table tbody tr:hover {
-    background: linear-gradient(90deg, rgba(74, 144, 226, 0.08) 0%, var(--light-bg) 20px);
-    box-shadow: inset 0 0 0 1px rgba(74, 144, 226, 0.1);
+    transform: translateY(-4px);
+    box-shadow: 0 18px 40px rgba(74, 144, 226, 0.25);
 }
 
-.data-table tbody tr:hover::before {
-    transform: scaleX(1);
+.data-table tbody tr td:first-child {
+    border-top-left-radius: 16px;
+    border-bottom-left-radius: 16px;
 }
 
-.data-table tbody tr:last-child td {
-    border-bottom: none;
+.data-table tbody tr td:last-child {
+    border-top-right-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.table-row--clickable {
+    cursor: pointer;
 }
 
 .whitelist-row {
@@ -518,8 +530,124 @@ body {
     text-align: center;
 }
 
+.table-empty {
+    text-align: center;
+    padding: 36px 16px;
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
+.table-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.table-title {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.table-note {
+    font-weight: 600;
+    color: var(--dark-bg);
+    line-height: 1.4;
+}
+
+.table-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.table-meta--strong {
+    color: var(--dark-bg);
+    font-weight: 600;
+}
+
+.table-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.table-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(74, 144, 226, 0.12);
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.table-pill--id {
+    letter-spacing: 0.04em;
+    font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', Courier, monospace;
+}
+
+.table-pill--count {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--success-color);
+}
+
+.table-pill--action {
+    background: rgba(255, 193, 7, 0.18);
+    color: #b97800;
+}
+
+.table-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.table-metric {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--dark-bg);
+}
+
+.table-cell--metric {
+    text-align: center;
+}
+
+.table-code {
+    font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', Courier, monospace;
+    background: rgba(15, 23, 42, 0.05);
+    padding: 6px 10px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.table-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 8px 0;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.pagination-info {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.pagination-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.pagination-controls .btn {
+    min-width: 120px;
+}
+
 .text-truncate {
-    max-width: 200px;
+    display: inline-block;
+    max-width: 240px;
+    width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -528,15 +656,126 @@ body {
 /* ==================== 过滤器组 ==================== */
 .filter-group {
     display: flex;
-    gap: 12px;
+    gap: 18px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.filter-group .btn {
+    align-self: flex-end;
+    height: 52px;
+    padding: 0 22px;
+    border-radius: 14px;
+}
+
+.filter-field {
+    flex: 1;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-field--wide {
+    min-width: 260px;
+    flex: 1.4;
+}
+
+.filter-field--compact {
+    max-width: 200px;
+    flex: 0 0 auto;
+}
+
+.filter-field--button {
+    flex: 0 0 auto;
+    min-width: 140px;
+    align-self: flex-start;
+}
+
+.filter-field--button .btn {
+    width: 100%;
+    height: 52px;
+    border-radius: 14px;
+    margin-top: 24px;
+}
+
+.filter-field--button .filter-field__label {
+    visibility: hidden;
+    height: 20px;
+}
+
+.filter-field__label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.filter-field__hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.filter-input {
+    display: flex;
     align-items: center;
+    gap: 10px;
+    background: white;
+    border-radius: 14px;
+    border: 1px solid rgba(74, 144, 226, 0.3);
+    padding: 10px 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 10px 25px rgba(15, 23, 42, 0.08);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.filter-input:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 14px 30px rgba(74, 144, 226, 0.2);
+}
+
+.filter-input__icon {
+    font-size: 16px;
+    color: var(--primary-color);
+}
+
+.filter-input input,
+.filter-input select {
+    border: none;
+    background: transparent;
+    flex: 1;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-color);
+    padding: 8px 0;
+}
+
+.filter-input input::placeholder,
+.filter-input select::placeholder {
+    color: #9aa6b2;
+}
+
+.filter-input input:focus,
+.filter-input select:focus {
+    outline: none;
 }
 
 .filter-group select {
-    padding: 8px 12px;
+    padding: 12px 16px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 10px;
     font-size: 14px;
+    min-height: 48px;
+}
+
+.filter-input input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+.filter-input input[type="number"]::-webkit-outer-spin-button,
+.filter-input input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 /* ==================== 加载动画 ==================== */
@@ -837,6 +1076,18 @@ body {
     .filter-group select {
         width: 100%;
     }
+
+    .filter-field,
+    .filter-field--wide,
+    .filter-field--compact,
+    .filter-field--button {
+        width: 100%;
+        max-width: none;
+    }
+
+    .filter-field--button .btn {
+        margin-top: 12px;
+    }
 }
 
 @media (max-width: 576px) {
@@ -854,6 +1105,19 @@ body {
 
     .content-header .btn,
     .filter-group .btn {
+        width: 100%;
+    }
+
+    .pagination-controls {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .pagination-controls .btn {
+        width: 100%;
+    }
+
+    .pagination-info {
         width: 100%;
     }
 }

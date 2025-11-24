@@ -198,7 +198,7 @@ async function addWhitelist(req, res) {
       });
     }
 
-    const normalizedHash = hash.toUpperCase();
+    const normalizedHash = finalCidHash ? finalCidHash.toUpperCase() : null;
 
     const db = dbManager.getDb();
     const whitelistModel = new WhitelistModel(db);
@@ -206,23 +206,23 @@ async function addWhitelist(req, res) {
     const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
 
     // 调试日志：输出即将插入的数据
-    logger.debug(`准备添加白名单: CID=${finalCid}, Hash=${finalCidHash}, Note=${note}`);
+    logger.debug(`准备添加白名单: CID=${finalCid}, Hash=${normalizedHash}, Note=${note}`);
 
     const success = whitelistModel.addToWhitelist({
       cid: finalCid,
-      cidHash: finalCidHash,
+      cidHash: normalizedHash,
       note: note || '',
       addedBy: adminIdentifier,
       expiresAt: expires_at || null
     });
 
     if (success) {
-      logger.info(`✅ 添加白名单成功: CID=${finalCid}, Hash=${finalCidHash}, By=${adminIdentifier}`);
+      logger.info(`✅ 添加白名单成功: CID=${finalCid}, Hash=${normalizedHash}, By=${adminIdentifier}`);
       res.json({
         success: true,
         message: '已添加到白名单',
         cid: finalCid,
-        cid_hash: finalCidHash
+        cid_hash: normalizedHash
       });
     } else {
       logger.warn(`⚠️ 添加白名单失败: ${finalCid || finalCidHash} - 已存在`);
@@ -388,13 +388,36 @@ async function updateWhitelist(req, res) {
  */
 async function getUsers(req, res) {
   try {
-    const { limit = 100, offset = 0 } = req.query;
+    const {
+      limit = 100,
+      offset = 0,
+      searchType,
+      characterName,
+      cid,
+      worldName
+    } = req.query;
 
     const db = dbManager.getDb();
     const userModel = new UserModel(db);
 
-    const users = userModel.getAllUsers(parseInt(limit), parseInt(offset));
-    const total = userModel.getUserCount();
+    const parsedLimit = parseInt(limit);
+    const parsedOffset = parseInt(offset);
+
+    let users;
+    let total;
+
+    if (searchType === 'name' && characterName) {
+      // 通过角色名查询 CID
+      users = userModel.findByCharacterName(characterName, worldName);
+      total = users.length;
+    } else if (searchType === 'cid' && cid) {
+      // 通过 CID 查询角色名
+      users = userModel.findByCid(cid);
+      total = users.length;
+    } else {
+      users = userModel.getAllUsers(parsedLimit, parsedOffset);
+      total = userModel.getUserCount();
+    }
 
     // 调试日志：检查 qq_info 字段
     if (users.length > 0) {
@@ -407,8 +430,8 @@ async function getUsers(req, res) {
       success: true,
       users,
       total,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      limit: parsedLimit,
+      offset: parsedOffset
     });
 
   } catch (error) {
