@@ -353,3 +353,8 @@ class DatabaseManager {
 // 导出单例
 const dbManager = new DatabaseManager();
 module.exports = dbManager;
+
+// 兼容旧版模型使用的 getInstance 导出
+module.exports.getInstance = function getInstance() {
+  return dbManager.getDb();
+};

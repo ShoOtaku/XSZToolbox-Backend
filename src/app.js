@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
+const http = require('http');
 const logger = require('./utils/logger');
 const dbManager = require('./models/database');
 
@@ -18,9 +19,12 @@ const { requestLogger } = require('./middleware/audit');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const activityRoutes = require('./routes/activity');
+const remoteRoutes = require('./routes/remoteRoutes');
+const websocketService = require('./services/websocketService');
 
 // 创建 Express 应用
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // ==================== 中间件配置 ====================
@@ -62,6 +66,9 @@ app.use('/api', apiRoutes);
 app.use('/api', activityRoutes);
 // 兼容旧客户端使用的 /api/api 前缀
 app.use('/api/api', activityRoutes);
+
+// 遥控/房间 API
+app.use('/api/remote', remoteRoutes);
 
 // 管理员 API
 app.use('/api/admin', adminRoutes);
@@ -138,8 +145,11 @@ async function startServer() {
     // 初始化数据库
     await initDatabase();
 
+    // 启动 WebSocket 服务
+    websocketService.init(server);
+
     // 启动服务器
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info('========================================');
       logger.info(`  XSZToolbox 后端服务已启动`);
       logger.info('========================================');
@@ -162,25 +172,38 @@ async function startServer() {
 
 // ==================== 优雅关闭 ====================
 
-process.on('SIGTERM', () => {
-  logger.info('收到 SIGTERM 信号，正在关闭服务器...');
-  dbManager.close();
-  process.exit(0);
-});
+let isShuttingDown = false;
 
-process.on('SIGINT', () => {
-  logger.info('\n收到 SIGINT 信号，正在关闭服务器...');
-  dbManager.close();
-  process.exit(0);
-});
+function shutdown(reason, exitCode = 0) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+  logger.info(`收到 ${reason} 信号，正在关闭服务器...`);
+
+  websocketService.close();
+
+  if (server.listening) {
+    server.close(() => {
+      dbManager.close();
+      process.exit(exitCode);
+    });
+  } else {
+    dbManager.close();
+    process.exit(exitCode);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // ==================== 未捕获异常处理 ====================
 
 process.on('uncaughtException', (error) => {
   logger.error(`❌ 未捕获的异常: ${error.message}`);
   logger.error(error.stack);
-  dbManager.close();
-  process.exit(1);
+  shutdown('uncaughtException', 1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {

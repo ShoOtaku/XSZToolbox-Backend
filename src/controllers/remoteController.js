@@ -4,8 +4,15 @@
  */
 
 const RoomModel = require('../models/roomModel');
+const dbManager = require('../models/database');
 const WhitelistModel = require('../models/whitelistModel');
 const { generateRoomCode } = require('../utils/roomCodeGenerator');
+
+function getWhitelistEntry(cidHash) {
+    const db = dbManager.getDb();
+    const whitelistModel = new WhitelistModel(db);
+    return whitelistModel.checkWhitelist(cidHash);
+}
 
 class RemoteController {
     /**
@@ -25,7 +32,7 @@ class RemoteController {
             }
 
             // 验证白名单
-            const whitelistEntry = WhitelistModel.getByCidHash(cidHash);
+            const whitelistEntry = getWhitelistEntry(cidHash);
             if (!whitelistEntry || !whitelistEntry.authorized) {
                 return res.status(403).json({
                     success: false,

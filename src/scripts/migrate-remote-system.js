@@ -3,14 +3,23 @@
  * 创建 remote_rooms, remote_room_members, remote_commands 表
  */
 
+require('dotenv').config();
+
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 // 获取数据库路径
-const dbPath = path.join(__dirname, '../../data/xsztoolbox.db');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../../database/xsztoolbox.db');
 
 function migrateRemoteSystem() {
     console.log('开始迁移遥控系统数据表...');
+    console.log(`目标数据库: ${dbPath}`);
+
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+    }
 
     const db = new Database(dbPath);
 
