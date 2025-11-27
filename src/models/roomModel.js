@@ -312,6 +312,9 @@ class RoomModel {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + durationSeconds * 1000);
 
+        // 转换为 SQLite 兼容的时间格式 (YYYY-MM-DD HH:MM:SS)
+        const sqliteFormat = expiresAt.toISOString().replace('T', ' ').replace('Z', '').slice(0, 19);
+
         const stmt = db.prepare(`
             UPDATE remote_rooms
             SET is_published = 1,
@@ -320,11 +323,11 @@ class RoomModel {
             WHERE room_code = ? AND status = 'active'
         `);
 
-        const result = stmt.run(expiresAt.toISOString(), roomCode);
+        const result = stmt.run(sqliteFormat, roomCode);
 
         return {
             success: result.changes > 0,
-            expiresAt: expiresAt.toISOString()
+            expiresAt: sqliteFormat
         };
     }
 
@@ -347,7 +350,7 @@ class RoomModel {
                 ON r.id = h.room_id AND h.role = 'Host'
             WHERE r.status = 'active'
                 AND r.is_published = 1
-                AND r.publish_expires_at > CURRENT_TIMESTAMP
+                AND datetime(r.publish_expires_at) > datetime('now')
             ORDER BY r.published_at DESC
         `);
 
