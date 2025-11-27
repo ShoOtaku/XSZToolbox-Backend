@@ -441,11 +441,15 @@ class RemoteController {
                 });
             }
 
-            // 验证房主权限
-            if (room.host_cid_hash !== hostCidHash) {
+            // 验证权限：房主或队长可设置成员职能
+            const requestingMember = RoomModel.getMember(room.id, hostCidHash);
+            const isHost = room.host_cid_hash === hostCidHash;
+            const isLeader = requestingMember?.role === 'Leader';
+
+            if (!isHost && !isLeader) {
                 return res.status(403).json({
                     success: false,
-                    error: '仅房主可设置职业标识'
+                    error: '仅房主或队长可设置成员职能'
                 });
             }
 
