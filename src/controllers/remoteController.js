@@ -133,6 +133,11 @@ class RemoteController {
             if (existingMember) {
                 // 更新连接状态
                 RoomModel.updateMemberStatus(room.id, cidHash, true);
+
+                // 如果是房主但角色不对，恢复房主角色
+                if (room.host_cid_hash === cidHash && existingMember.role !== 'Host') {
+                    RoomModel.updateMemberRole(room.id, cidHash, 'Host');
+                }
             } else {
                 // 检查房间是否已满
                 const memberCount = RoomModel.getMemberCount(room.id);
@@ -143,13 +148,14 @@ class RemoteController {
                     });
                 }
 
-                // 添加成员
+                // 添加成员（检查是否为房主，动态设置角色）
+                const memberRole = (room.host_cid_hash === cidHash) ? 'Host' : 'Member';
                 RoomModel.addMember({
                     roomId: room.id,
                     cidHash,
                     characterName,
                     worldName,
-                    role: 'Member'
+                    role: memberRole
                 });
             }
 
