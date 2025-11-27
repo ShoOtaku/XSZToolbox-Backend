@@ -53,19 +53,39 @@ class WebSocketService {
                 const { roomCode, cidHash } = data;
 
                 if (!roomCode || !cidHash) {
-                    return socket.emit('error', { message: '缺少必需参数' });
+                    console.warn(`[WebSocket] join-room 缺少必需参数 (roomCode: ${!!roomCode}, cidHash: ${!!cidHash})`);
+                    return socket.emit('error', { 
+                        message: '缺少必需参数：roomCode 和 cidHash 为必填项',
+                        code: 'MISSING_REQUIRED_PARAMS'
+                    });
                 }
 
                 // 验证房间
                 const room = RoomModel.getRoomByCode(roomCode);
-                if (!room || room.status !== 'active') {
-                    return socket.emit('error', { message: '房间不存在或已关闭' });
+                if (!room) {
+                    console.warn(`[WebSocket] join-room 房间不存在 (roomCode: ${roomCode}, cidHash: ${cidHash.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '房间不存在',
+                        code: 'ROOM_NOT_FOUND'
+                    });
+                }
+                
+                if (room.status !== 'active') {
+                    console.warn(`[WebSocket] join-room 房间已关闭 (roomCode: ${roomCode}, status: ${room.status}, cidHash: ${cidHash.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '房间已关闭',
+                        code: 'ROOM_CLOSED'
+                    });
                 }
 
                 // 验证成员资格
                 const member = RoomModel.getMember(room.id, cidHash);
                 if (!member) {
-                    return socket.emit('error', { message: '未加入该房间' });
+                    console.warn(`[WebSocket] join-room 非房间成员尝试加入 (roomCode: ${roomCode}, cidHash: ${cidHash.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '您不是该房间的成员',
+                        code: 'NOT_ROOM_MEMBER'
+                    });
                 }
 
                 // 加入Socket.IO房间
@@ -91,11 +111,22 @@ class WebSocketService {
                     message: '成功加入房间'
                 });
 
-                console.log(`[WebSocket] ${cidHash.substring(0, 8)}... 加入房间 ${roomCode}`);
+                console.log(`[WebSocket] 成员已加入房间 (cidHash: ${cidHash.substring(0, 8)}..., roomCode: ${roomCode}, socketId: ${socket.id})`);
 
             } catch (error) {
-                console.error('[WebSocket] join-room 错误:', error);
-                socket.emit('error', { message: '加入房间失败' });
+                console.error('[WebSocket] join-room 未捕获错误:', {
+                    error: error.message,
+                    stack: error.stack,
+                    socketId: socket.id,
+                    data: {
+                        roomCode: data?.roomCode,
+                        cidHash: data?.cidHash ? data.cidHash.substring(0, 8) + '...' : undefined
+                    }
+                });
+                socket.emit('error', { 
+                    message: '加入房间失败，请稍后重试',
+                    code: 'INTERNAL_ERROR'
+                });
             }
         });
 
@@ -104,22 +135,76 @@ class WebSocketService {
             try {
                 const { roomCode, targetCid, regexRole, commandType, commandData } = data;
 
+                // 验证必需参数
+                if (!roomCode || !commandType) {
+                    console.warn(`[WebSocket] send-command 缺少必需参数 (roomCode: ${!!roomCode}, commandType: ${!!commandType})`);
+                    return socket.emit('error', { 
+                        message: '缺少必需参数：roomCode 和 commandType 为必填项',
+                        code: 'MISSING_REQUIRED_PARAMS'
+                    });
+                }
+
                 // 获取发送者CID
                 const senderCid = this.sessionManager.getCidBySocketId(socket.id);
                 if (!senderCid) {
-                    return socket.emit('error', { message: '未找到会话' });
+                    console.warn(`[WebSocket] send-command 未找到会话 (socketId: ${socket.id})`);
+                    return socket.emit('error', { 
+                        message: '会话已过期，请重新加入房间',
+                        code: 'SESSION_NOT_FOUND'
+                    });
                 }
 
                 // 验证房间
                 const room = RoomModel.getRoomByCode(roomCode);
-                if (!room || room.status !== 'active') {
-                    return socket.emit('error', { message: '房间不存在或已关闭' });
+                if (!room) {
+                    console.warn(`[WebSocket] send-command 房间不存在 (roomCode: ${roomCode}, 发送者: ${senderCid.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '房间不存在',
+                        code: 'ROOM_NOT_FOUND'
+                    });
+                }
+                
+                if (room.status !== 'active') {
+                    console.warn(`[WebSocket] send-command 房间已关闭 (roomCode: ${roomCode}, status: ${room.status}, 发送者: ${senderCid.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '房间已关闭，无法发送指令',
+                        code: 'ROOM_CLOSED'
+                    });
                 }
 
                 // 验证发送者权限
                 const sender = RoomModel.getMember(room.id, senderCid);
-                if (!sender || !['Host', 'Leader'].includes(sender.role)) {
-                    return socket.emit('error', { message: '权限不足：仅房主和指挥可发送指令' });
+                if (!sender) {
+                    console.warn(`[WebSocket] send-command 发送者不是房间成员 (roomCode: ${roomCode}, 发送者: ${senderCid.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '您不是该房间的成员',
+                        code: 'NOT_ROOM_MEMBER'
+                    });
+                }
+                
+                if (!['Host', 'Leader'].includes(sender.role)) {
+                    console.warn(`[WebSocket] send-command 权限不足 (roomCode: ${roomCode}, 发送者: ${senderCid.substring(0, 8)}..., role: ${sender.role})`);
+                    return socket.emit('error', { 
+                        message: '权限不足：仅房主和指挥可发送指令',
+                        code: 'INSUFFICIENT_PERMISSION'
+                    });
+                }
+
+                // 验证和清理 commandData
+                let sanitizedData = commandData ?? {};
+                
+                // 检查是否为 null/undefined/missing，记录日志
+                if (commandData === null || commandData === undefined) {
+                    console.warn(`[WebSocket] commandData 为 ${commandData === null ? 'null' : 'undefined'}，已默认为空对象 (发送者: ${senderCid.substring(0, 8)}..., 房间: ${roomCode}, 指令类型: ${commandType})`);
+                }
+                
+                // 类型检查：确保是对象类型
+                if (typeof sanitizedData !== 'object' || Array.isArray(sanitizedData)) {
+                    console.warn(`[WebSocket] commandData 类型无效: ${typeof sanitizedData}, isArray: ${Array.isArray(sanitizedData)} (发送者: ${senderCid.substring(0, 8)}..., 房间: ${roomCode}, 指令类型: ${commandType})`);
+                    return socket.emit('error', { 
+                        message: '指令数据格式错误：commandData 必须是对象类型',
+                        code: 'INVALID_COMMAND_DATA_TYPE'
+                    });
                 }
 
                 // 确定目标成员列表
@@ -127,40 +212,86 @@ class WebSocketService {
                 if (targetCid) {
                     // 单播模式
                     const targetMember = RoomModel.getMember(room.id, targetCid);
-                    if (targetMember && targetMember.is_connected) {
-                        targets = [targetMember];
+                    if (!targetMember) {
+                        console.warn(`[WebSocket] send-command 目标成员不存在 (targetCid: ${targetCid.substring(0, 8)}..., 房间: ${roomCode})`);
+                        return socket.emit('error', { 
+                            message: '目标成员不存在',
+                            code: 'TARGET_NOT_FOUND'
+                        });
                     }
+                    if (!targetMember.is_connected) {
+                        console.warn(`[WebSocket] send-command 目标成员离线 (targetCid: ${targetCid.substring(0, 8)}..., 房间: ${roomCode})`);
+                        return socket.emit('error', { 
+                            message: '目标成员当前离线',
+                            code: 'TARGET_OFFLINE'
+                        });
+                    }
+                    targets = [targetMember];
                 } else if (regexRole) {
                     // RegexRole选择器模式
                     targets = RoomModel.selectMembersByRole(room.id, regexRole);
+                    if (targets.length === 0) {
+                        console.warn(`[WebSocket] send-command 未找到匹配角色的成员 (regexRole: ${regexRole}, 房间: ${roomCode})`);
+                        return socket.emit('error', { 
+                            message: `未找到匹配角色 "${regexRole}" 的在线成员`,
+                            code: 'NO_MATCHING_ROLE'
+                        });
+                    }
                 } else {
                     // 广播模式（所有在线成员）
                     targets = RoomModel.getRoomMembers(room.id).filter(m => m.is_connected === 1);
-                }
-
-                if (targets.length === 0) {
-                    return socket.emit('error', { message: '未找到目标成员' });
+                    if (targets.length === 0) {
+                        console.warn(`[WebSocket] send-command 房间内无在线成员 (房间: ${roomCode})`);
+                        return socket.emit('error', { 
+                            message: '房间内当前无在线成员',
+                            code: 'NO_ONLINE_MEMBERS'
+                        });
+                    }
                 }
 
                 // 记录指令
-                const command = CommandModel.createCommand({
-                    roomId: room.id,
-                    senderCidHash: senderCid,
-                    targetCidHash: targetCid || null,
-                    commandType,
-                    commandData: JSON.stringify(commandData),
-                    status: 'pending'
-                });
+                let command;
+                try {
+                    command = CommandModel.createCommand({
+                        roomId: room.id,
+                        senderCidHash: senderCid,
+                        targetCidHash: targetCid || null,
+                        commandType,
+                        commandData: JSON.stringify(sanitizedData),
+                        status: 'pending'
+                    });
+                    console.log(`[WebSocket] 指令已创建 (ID: ${command.id}, 类型: ${commandType}, 发送者: ${senderCid.substring(0, 8)}..., 房间: ${roomCode})`);
+                } catch (dbError) {
+                    console.error(`[WebSocket] send-command 数据库错误:`, {
+                        error: dbError.message,
+                        stack: dbError.stack,
+                        roomCode,
+                        senderCid: senderCid.substring(0, 8) + '...',
+                        commandType
+                    });
+                    return socket.emit('error', { 
+                        message: '保存指令失败，请稍后重试',
+                        code: 'DATABASE_ERROR'
+                    });
+                }
 
                 // 转发指令给目标成员
                 const targetSocketIds = targets.map(t => this.sessionManager.getSocketIdByCid(t.cid_hash)).filter(Boolean);
+
+                if (targetSocketIds.length === 0) {
+                    console.warn(`[WebSocket] send-command 目标成员无活动连接 (房间: ${roomCode}, 目标数: ${targets.length})`);
+                    return socket.emit('error', { 
+                        message: '目标成员无活动连接，请确认成员在线状态',
+                        code: 'NO_ACTIVE_CONNECTIONS'
+                    });
+                }
 
                 for (const targetSocketId of targetSocketIds) {
                     this.io.to(targetSocketId).emit('command', {
                         commandId: command.id,
                         senderCid,
                         commandType,
-                        data: commandData,
+                        data: sanitizedData,
                         timestamp: new Date().toISOString()
                     });
                 }
@@ -172,11 +303,23 @@ class WebSocketService {
                     timestamp: new Date().toISOString()
                 });
 
-                console.log(`[WebSocket] 指令 ${command.id} 已发送: ${commandType} → ${targetSocketIds.length} 个目标`);
+                console.log(`[WebSocket] 指令已转发 (ID: ${command.id}, 类型: ${commandType}, 目标数: ${targetSocketIds.length}, 房间: ${roomCode})`);
 
             } catch (error) {
-                console.error('[WebSocket] send-command 错误:', error);
-                socket.emit('error', { message: '发送指令失败' });
+                console.error('[WebSocket] send-command 未捕获错误:', {
+                    error: error.message,
+                    stack: error.stack,
+                    socketId: socket.id,
+                    data: {
+                        roomCode: data?.roomCode,
+                        commandType: data?.commandType,
+                        hasCommandData: data?.commandData !== undefined
+                    }
+                });
+                socket.emit('error', { 
+                    message: '发送指令失败，请稍后重试',
+                    code: 'INTERNAL_ERROR'
+                });
             }
         });
 
@@ -246,15 +389,31 @@ class WebSocketService {
         socket.on('update-job-role', async (data) => {
             try {
                 const { roomCode, jobRole } = data;
+                
+                if (!roomCode || !jobRole) {
+                    console.warn(`[WebSocket] update-job-role 缺少必需参数 (roomCode: ${!!roomCode}, jobRole: ${!!jobRole})`);
+                    return socket.emit('error', { 
+                        message: '缺少必需参数：roomCode 和 jobRole 为必填项',
+                        code: 'MISSING_REQUIRED_PARAMS'
+                    });
+                }
+                
                 const cidHash = this.sessionManager.getCidBySocketId(socket.id);
-
                 if (!cidHash) {
-                    return socket.emit('error', { message: '未找到会话' });
+                    console.warn(`[WebSocket] update-job-role 未找到会话 (socketId: ${socket.id})`);
+                    return socket.emit('error', { 
+                        message: '会话已过期，请重新加入房间',
+                        code: 'SESSION_NOT_FOUND'
+                    });
                 }
 
                 const room = RoomModel.getRoomByCode(roomCode);
                 if (!room) {
-                    return socket.emit('error', { message: '房间不存在' });
+                    console.warn(`[WebSocket] update-job-role 房间不存在 (roomCode: ${roomCode}, cidHash: ${cidHash.substring(0, 8)}...)`);
+                    return socket.emit('error', { 
+                        message: '房间不存在',
+                        code: 'ROOM_NOT_FOUND'
+                    });
                 }
 
                 // 更新职业标识
@@ -267,11 +426,22 @@ class WebSocketService {
                     timestamp: new Date().toISOString()
                 });
 
-                console.log(`[WebSocket] ${cidHash.substring(0, 8)}... 职业标识更新: ${jobRole}`);
+                console.log(`[WebSocket] 职业标识已更新 (cidHash: ${cidHash.substring(0, 8)}..., jobRole: ${jobRole}, roomCode: ${roomCode})`);
 
             } catch (error) {
-                console.error('[WebSocket] update-job-role 错误:', error);
-                socket.emit('error', { message: '更新职业标识失败' });
+                console.error('[WebSocket] update-job-role 未捕获错误:', {
+                    error: error.message,
+                    stack: error.stack,
+                    socketId: socket.id,
+                    data: {
+                        roomCode: data?.roomCode,
+                        jobRole: data?.jobRole
+                    }
+                });
+                socket.emit('error', { 
+                    message: '更新职业标识失败，请稍后重试',
+                    code: 'INTERNAL_ERROR'
+                });
             }
         });
 

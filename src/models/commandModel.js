@@ -28,13 +28,20 @@ class CommandModel {
             status = 'pending'
         } = commandData;
 
+        // Defensive validation: ensure command_data is never NULL or invalid
+        let sanitizedData = data;
+        if (!data || data === 'undefined' || data === 'null' || data.trim() === '') {
+            console.warn('[CommandModel] Invalid command_data detected, using empty object. Original value:', data);
+            sanitizedData = '{}';
+        }
+
         const stmt = db.prepare(`
             INSERT INTO remote_commands
             (room_id, sender_cid_hash, target_cid_hash, command_type, command_data, status)
             VALUES (?, ?, ?, ?, ?, ?)
         `);
 
-        const result = stmt.run(roomId, senderCidHash, targetCidHash, commandType, data, status);
+        const result = stmt.run(roomId, senderCidHash, targetCidHash, commandType, sanitizedData, status);
 
         return this.getCommandById(result.lastInsertRowid);
     }
