@@ -72,13 +72,16 @@ class CommandModel {
         const db = getInstance();
         const { commandId, status, errorMessage = null, executedAt = new Date() } = updateData;
 
+        // 将 Date 对象转换为 ISO 字符串格式
+        const executedAtStr = executedAt instanceof Date ? executedAt.toISOString() : executedAt;
+
         const stmt = db.prepare(`
             UPDATE remote_commands
             SET status = ?, error_message = ?, executed_at = ?
             WHERE id = ?
         `);
 
-        return stmt.run(status, errorMessage, executedAt, commandId);
+        return stmt.run(status, errorMessage, executedAtStr, commandId);
     }
 
     /**
