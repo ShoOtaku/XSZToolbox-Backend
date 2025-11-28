@@ -81,4 +81,31 @@ router.get('/logs',
   adminController.getLogs
 );
 
+// ==================== 房间管理路由 ====================
+
+/**
+ * GET /api/admin/rooms
+ * 获取房间列表（支持状态筛选）
+ */
+router.get('/rooms',
+  adminController.getAllRooms
+);
+
+/**
+ * GET /api/admin/rooms/:roomId/members
+ * 获取房间成员详情
+ */
+router.get('/rooms/:roomId/members',
+  adminController.getRoomMembers
+);
+
+/**
+ * DELETE /api/admin/rooms/:roomId
+ * 管理员强制关闭房间
+ */
+router.delete('/rooms/:roomId',
+  auditLog('room_close'),
+  adminController.adminCloseRoom
+);
+
 module.exports = router;

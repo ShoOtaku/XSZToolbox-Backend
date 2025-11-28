@@ -356,6 +356,75 @@ class RoomModel {
 
         return stmt.all();
     }
+
+    /**
+     * 获取房间列表（管理员用，支持状态筛选）
+     * @param {string} status - 房间状态筛选 ('active' | 'closed' | 'all')
+     * @param {number} limit - 返回数量限制
+     * @param {number} offset - 偏移量
+     * @returns {Array} 房间列表（含房主信息和成员数）
+     */
+    static getAllRooms(status = 'active', limit = 100, offset = 0) {
+        const db = getInstance();
+
+        // 构建 WHERE 子句
+        let whereClause = '';
+        if (status === 'active') {
+            whereClause = "WHERE r.status = 'active'";
+        } else if (status === 'closed') {
+            whereClause = "WHERE r.status = 'closed'";
+        }
+        // status === 'all' 时不添加 WHERE 子句
+
+        const stmt = db.prepare(`
+            SELECT
+                r.id,
+                r.room_code,
+                r.room_name,
+                r.host_cid_hash,
+                r.max_members,
+                r.status,
+                r.created_at,
+                r.expires_at,
+                r.is_published,
+                r.published_at,
+                r.publish_expires_at,
+                h.character_name as host_name,
+                h.world_name as host_world,
+                (SELECT COUNT(*) FROM remote_room_members WHERE room_id = r.id) as member_count,
+                (SELECT COUNT(*) FROM remote_room_members WHERE room_id = r.id AND is_connected = 1) as online_count
+            FROM remote_rooms r
+            LEFT JOIN remote_room_members h
+                ON r.id = h.room_id AND h.role = 'Host'
+            ${whereClause}
+            ORDER BY r.created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * 获取房间总数（支持状态筛选）
+     * @param {string} status - 房间状态筛选 ('active' | 'closed' | 'all')
+     * @returns {number} 房间数量
+     */
+    static getRoomCount(status = 'active') {
+        const db = getInstance();
+
+        let whereClause = '';
+        if (status === 'active') {
+            whereClause = "WHERE status = 'active'";
+        } else if (status === 'closed') {
+            whereClause = "WHERE status = 'closed'";
+        }
+
+        const stmt = db.prepare(`
+            SELECT COUNT(*) as count FROM remote_rooms ${whereClause}
+        `);
+
+        return stmt.get().count;
+    }
 }
 
 module.exports = RoomModel;

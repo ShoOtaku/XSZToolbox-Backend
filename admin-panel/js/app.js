@@ -1,4 +1,41 @@
 /**
+ * 服务器ID到名称的映射表
+ */
+const WORLD_NAMES = {
+    161: '陆行鸟', 166: '莫古力', 168: '鲶鱼精', 190: '豆豆柴',
+    1042: '拉诺西亚', 1043: '紫水栈桥', 1044: '幻影群岛', 1045: '摩杜纳',
+    1060: '萌芽池', 1076: '白金幻象', 1081: '神意之地', 1106: '静语庄园',
+    1113: '旅人栈桥', 1121: '拂晓之间', 1166: '龙巢神殿', 1167: '红玉海',
+    1169: '延夏', 1170: '潮风亭', 1171: '神拳痕', 1172: '白银乡',
+    1173: '宇宙和音', 1174: '沃仙曦染', 1175: '晨曦王座', 1176: '梦羽宝境',
+    1177: '海猫茶屋', 1178: '柔风海湾', 1179: '琥珀原', 1180: '太阳海岸',
+    1183: '银泪湖', 1186: '伊修加德', 1192: '水晶塔', 1200: '亚马乌罗提',
+    1201: '红茶川'
+};
+
+/**
+ * 根据服务器ID获取服务器名称
+ */
+function getWorldName(worldId) {
+    return WORLD_NAMES[worldId] || worldId || '-';
+}
+
+/**
+ * 填充服务器选择下拉列表
+ */
+function populateWorldSelects() {
+    const selects = document.querySelectorAll('.world-select');
+    const defaultOption = '<option value="">全部服务器</option>';
+    const options = Object.entries(WORLD_NAMES)
+        .sort((a, b) => a[1].localeCompare(b[1], 'zh-CN'))
+        .map(([id, name]) => `<option value="${id}">${name}</option>`)
+        .join('');
+    selects.forEach(select => {
+        select.innerHTML = defaultOption + options;
+    });
+}
+
+/**
  * 主应用逻辑
  */
 
@@ -9,6 +46,8 @@ class App {
         this.logsCache = []; // 缓存日志列表用于详情显示
         this.whitelistCache = []; // 缓存白名单列表
         this.playersCache = []; // 缓存玩家信息
+        this.roomsCache = []; // 缓存房间列表
+        this.currentRoomId = null; // 当前查看的房间ID
         this.logsPagination = { limit: 20, offset: 0, total: 0 };
         this.editingWhitelistHash = null;
         this.init();
@@ -24,6 +63,9 @@ class App {
         } else {
             this.showLoginPage();
         }
+
+        // 填充服务器下拉列表
+        populateWorldSelects();
 
         // 绑定事件
         this.bindEvents();
@@ -128,6 +170,41 @@ class App {
             }
         });
 
+        // 房间管理
+        document.getElementById('refreshRoomsBtn')?.addEventListener('click', () => this.loadRooms());
+        document.getElementById('roomStatusFilter')?.addEventListener('change', () => this.loadRooms());
+        document.getElementById('roomsTable')?.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+
+            // 关闭按钮
+            const closeBtn = target.closest('.room-close-btn');
+            if (closeBtn) {
+                const roomId = closeBtn.dataset.roomId;
+                this.handleAdminCloseRoom(roomId);
+                return;
+            }
+
+            // 点击行显示详情
+            const row = target.closest('tr[data-room-index]');
+            if (row) {
+                const index = parseInt(row.dataset.roomIndex, 10);
+                if (!Number.isNaN(index)) {
+                    this.showRoomDetail(index);
+                }
+            }
+        });
+
+        // 房间详情模态框
+        document.getElementById('closeRoomModal')?.addEventListener('click', () => this.closeRoomDetailModal());
+        document.getElementById('cancelRoomModalBtn')?.addEventListener('click', () => this.closeRoomDetailModal());
+        document.getElementById('roomDetailModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'roomDetailModal') {
+                this.closeRoomDetailModal();
+            }
+        });
+        document.getElementById('modalCloseRoomBtn')?.addEventListener('click', () => this.handleCloseRoomFromModal());
+
         // 回车登录
         ['username', 'password'].forEach(id => {
             document.getElementById(id)?.addEventListener('keypress', (e) => {
@@ -201,6 +278,9 @@ class App {
             case 'activity':
                 this.loadActivityStats();
                 break;
+            case 'rooms':
+                this.loadRooms();
+                break;
         }
     }
 
@@ -250,7 +330,7 @@ class App {
                 statistics.leaderboard.forEach((item) => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${item.world_id}</td>
+                        <td>${getWorldName(item.world_id)}</td>
                         <td>${item.total_unique_players}</td>
                         <td>${item.total_encounters}</td>
                     `;
@@ -266,7 +346,7 @@ class App {
             } else {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${stat.world_id}</td>
+                    <td>${getWorldName(stat.world_id)}</td>
                     <td>${stat.total_unique_players}</td>
                     <td>${stat.total_encounters}</td>
                 `;
@@ -398,7 +478,7 @@ class App {
                 : placeholder('-');
             const worldCell = player.world_id || player.world_name
                 ? `<div class="table-stack">
-                        <span class="table-title">${player.world_id ?? '-'}</span>
+                        <span class="table-title">${getWorldName(player.world_id)}</span>
                         ${player.world_name ? `<span class="table-meta">${player.world_name}</span>` : ''}
                    </div>`
                 : placeholder('-');
@@ -910,7 +990,7 @@ class App {
                 <td>
                     ${(user.world_id || user.world_name)
                         ? `<div class="table-stack">
-                                <span class="table-title">${user.world_id || '-'}</span>
+                                <span class="table-title">${getWorldName(user.world_id)}</span>
                                 ${user.world_name ? `<span class="table-meta">${user.world_name}</span>` : ''}
                            </div>`
                         : placeholder('-')}
@@ -1402,6 +1482,261 @@ class App {
         setTimeout(() => {
             element.classList.remove('show');
         }, 5000);
+    }
+
+    // ==================== 房间管理 ====================
+
+    /**
+     * 加载房间列表
+     */
+    async loadRooms() {
+        const statusSelect = document.getElementById('roomStatusFilter');
+        const status = statusSelect ? statusSelect.value : 'active';
+
+        try {
+            this.showLoading(true);
+            const response = await api.getRooms(status, 100, 0);
+
+            if (response.success) {
+                this.roomsCache = response.rooms || [];
+                this.renderRoomsTable(this.roomsCache, response.total || this.roomsCache.length);
+
+                // 更新统计卡片
+                document.getElementById('roomCount').textContent = response.total || 0;
+
+                // 计算总在线人数
+                const totalOnline = this.roomsCache.reduce((sum, room) => sum + (room.online_count || 0), 0);
+                document.getElementById('totalOnlineMembers').textContent = totalOnline;
+            }
+        } catch (error) {
+            this.showToast(error.message || '加载房间列表失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 渲染房间列表表格
+     */
+    renderRoomsTable(rooms, total = 0) {
+        const tbody = document.getElementById('roomsTable');
+        const summary = document.getElementById('roomsSummary');
+        if (!tbody) return;
+
+        if (!rooms || rooms.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="table-empty">暂无房间数据</td></tr>';
+            if (summary) {
+                summary.textContent = `共 ${total || 0} 个房间`;
+            }
+            return;
+        }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
+
+        const html = rooms.map((room, index) => {
+            const roomCodeCell = `<span class="table-pill table-pill--id">${room.room_code}</span>`;
+            const roomNameCell = room.room_name
+                ? `<span class="table-title">${room.room_name}</span>`
+                : placeholder('未命名');
+            const hostCell = room.host_name
+                ? `<div class="table-stack">
+                        <span class="table-title">${room.host_name}</span>
+                        ${room.host_world ? `<span class="table-meta">${room.host_world}</span>` : ''}
+                   </div>`
+                : placeholder('未知');
+            const memberCell = `<span class="table-metric">${room.online_count || 0}/${room.member_count || 0}</span>`;
+
+            // 状态显示
+            let statusCell;
+            if (room.status === 'closed') {
+                statusCell = `<span class="table-pill" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;">已关闭</span>`;
+            } else if (room.is_published) {
+                statusCell = `<span class="table-pill" style="background: rgba(40, 167, 69, 0.15); color: var(--success-color);">公开中</span>`;
+            } else {
+                statusCell = `<span class="table-pill" style="background: rgba(74, 144, 226, 0.12); color: var(--primary-color);">活跃</span>`;
+            }
+
+            // 操作按钮：只有活跃房间才能关闭
+            const actionContent = room.status === 'active'
+                ? `<button class="btn btn-danger btn-sm room-close-btn" data-room-id="${room.id}">关闭</button>`
+                : placeholder('-');
+
+            return `
+            <tr class="table-row--clickable" data-room-index="${index}">
+                <td>${roomCodeCell}</td>
+                <td>${roomNameCell}</td>
+                <td>${hostCell}</td>
+                <td class="table-cell--metric">${memberCell}</td>
+                <td>${statusCell}</td>
+                <td>${formatDateCell(room.created_at)}</td>
+                <td class="table-actions">${actionContent}</td>
+            </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = html;
+        if (summary) {
+            summary.textContent = `共 ${total} 个房间，显示 ${rooms.length} 条`;
+        }
+    }
+
+    /**
+     * 处理管理员关闭房间
+     */
+    async handleAdminCloseRoom(roomId) {
+        if (!roomId) {
+            this.showToast('无效的房间 ID', 'error');
+            return;
+        }
+
+        const room = this.roomsCache.find(r => r.id === parseInt(roomId));
+        const confirmMsg = room
+            ? `确定要关闭房间 ${room.room_code} 吗？\n\n房间名称: ${room.room_name || '未命名'}\n房主: ${room.host_name || '未知'}`
+            : `确定要关闭房间 ID: ${roomId} 吗？`;
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.adminCloseRoom(roomId);
+
+            if (response.success) {
+                this.showToast(`房间 ${response.roomCode || roomId} 已关闭`, 'success');
+                this.loadRooms(); // 刷新列表
+            } else {
+                this.showToast(response.message || '关闭房间失败', 'error');
+            }
+        } catch (error) {
+            this.showToast(error.message || '关闭房间失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 显示房间详情模态框
+     */
+    async showRoomDetail(index) {
+        const room = this.roomsCache[index];
+        if (!room) return;
+
+        this.currentRoomId = room.id;
+
+        // 填充基本信息
+        document.getElementById('modalRoomCode').textContent = room.room_code;
+        document.getElementById('modalRoomName').textContent = room.room_name || '未命名';
+        document.getElementById('modalRoomHost').textContent = room.host_name
+            ? `${room.host_name}${room.host_world ? '@' + room.host_world : ''}`
+            : '未知';
+        document.getElementById('modalRoomStatus').textContent =
+            room.status === 'closed' ? '已关闭' : (room.is_published ? '公开中' : '活跃');
+        document.getElementById('modalRoomCreated').textContent = this.formatDate(room.created_at);
+        document.getElementById('modalRoomExpires').textContent = this.formatDate(room.expires_at) || '无';
+        document.getElementById('modalRoomPublished').textContent =
+            room.is_published ? `是 (至 ${this.formatDate(room.publish_expires_at)})` : '否';
+
+        // 更新关闭按钮状态
+        const closeBtn = document.getElementById('modalCloseRoomBtn');
+        if (closeBtn) {
+            closeBtn.disabled = room.status !== 'active';
+            closeBtn.style.display = room.status === 'active' ? '' : 'none';
+        }
+
+        // 显示加载中
+        document.getElementById('modalRoomMembers').innerHTML =
+            '<tr><td colspan="5" class="table-empty">加载中...</td></tr>';
+
+        // 显示模态框
+        document.getElementById('roomDetailModal').classList.add('active');
+
+        // 加载成员详情
+        try {
+            const response = await api.getRoomMembers(room.id);
+            if (response.success) {
+                this.renderMembersList(response.members || []);
+            } else {
+                document.getElementById('modalRoomMembers').innerHTML =
+                    '<tr><td colspan="5" class="table-empty">加载成员失败</td></tr>';
+            }
+        } catch (error) {
+            document.getElementById('modalRoomMembers').innerHTML =
+                `<tr><td colspan="5" class="table-empty">加载失败: ${error.message}</td></tr>`;
+        }
+    }
+
+    /**
+     * 渲染成员列表
+     */
+    renderMembersList(members) {
+        const tbody = document.getElementById('modalRoomMembers');
+        if (!tbody) return;
+
+        if (!members || members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="table-empty">暂无成员</td></tr>';
+            return;
+        }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+
+        const roleNames = {
+            'Host': '房主',
+            'Leader': '队长',
+            'Member': '成员'
+        };
+
+        const html = members.map(member => {
+            const nameCell = member.character_name
+                ? `<span class="table-title">${member.character_name}</span>`
+                : placeholder('-');
+            const worldCell = member.world_name
+                ? `<span class="table-meta">${member.world_name}</span>`
+                : placeholder('-');
+            const jobRoleCell = member.job_role
+                ? `<span class="table-pill table-pill--id">${member.job_role}</span>`
+                : placeholder('-');
+            const roleCell = member.role
+                ? `<span class="table-meta table-meta--strong">${roleNames[member.role] || member.role}</span>`
+                : placeholder('-');
+            const statusCell = member.is_connected
+                ? `<span class="table-pill" style="background: rgba(40, 167, 69, 0.15); color: var(--success-color);">在线</span>`
+                : `<span class="table-pill" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;">离线</span>`;
+
+            return `
+            <tr>
+                <td>${nameCell}</td>
+                <td>${worldCell}</td>
+                <td>${jobRoleCell}</td>
+                <td>${roleCell}</td>
+                <td>${statusCell}</td>
+            </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = html;
+    }
+
+    /**
+     * 关闭房间详情模态框
+     */
+    closeRoomDetailModal() {
+        document.getElementById('roomDetailModal').classList.remove('active');
+        this.currentRoomId = null;
+    }
+
+    /**
+     * 从模态框关闭房间
+     */
+    async handleCloseRoomFromModal() {
+        if (!this.currentRoomId) return;
+        const roomId = this.currentRoomId;
+        this.closeRoomDetailModal();
+        await this.handleAdminCloseRoom(roomId);
     }
 }
 

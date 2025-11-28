@@ -8,6 +8,7 @@ const AdminModel = require('../models/adminModel');
 const UserModel = require('../models/userModel');
 const WhitelistModel = require('../models/whitelistModel');
 const AuditLogModel = require('../models/auditLogModel');
+const RoomModel = require('../models/roomModel');
 const dbManager = require('../models/database');
 const logger = require('../utils/logger');
 const { generateToken } = require('../middleware/auth');
@@ -512,6 +513,143 @@ async function getLogs(req, res) {
   }
 }
 
+/**
+ * 获取所有房间列表（管理员用）
+ * GET /api/admin/rooms?status=active|closed|all
+ */
+async function getAllRooms(req, res) {
+  try {
+    const { status = 'active', limit = 100, offset = 0 } = req.query;
+
+    // 验证 status 参数
+    const validStatuses = ['active', 'closed', 'all'];
+    const normalizedStatus = validStatuses.includes(status) ? status : 'active';
+
+    const rooms = RoomModel.getAllRooms(normalizedStatus, parseInt(limit), parseInt(offset));
+    const total = RoomModel.getRoomCount(normalizedStatus);
+
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+    logger.info(`✅ 房间列表查询成功: ${rooms.length} 条记录, status=${normalizedStatus}, by ${adminIdentifier}`);
+
+    res.json({
+      success: true,
+      rooms,
+      total,
+      status: normalizedStatus,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (error) {
+    logger.error(`❌ 房间列表查询失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: '服务器错误'
+    });
+  }
+}
+
+/**
+ * 获取房间成员详情
+ * GET /api/admin/rooms/:roomId/members
+ */
+async function getRoomMembers(req, res) {
+  try {
+    const { roomId } = req.params;
+
+    if (!roomId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        message: '缺少房间 ID'
+      });
+    }
+
+    const room = RoomModel.getRoomById(parseInt(roomId));
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: '房间不存在'
+      });
+    }
+
+    const members = RoomModel.getRoomMembers(room.id);
+
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+    logger.info(`✅ 房间成员查询成功: 房间=${room.room_code}, 成员数=${members.length}, by ${adminIdentifier}`);
+
+    res.json({
+      success: true,
+      room,
+      members
+    });
+
+  } catch (error) {
+    logger.error(`❌ 房间成员查询失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: '服务器错误'
+    });
+  }
+}
+
+/**
+ * 管理员强制关闭房间
+ * DELETE /api/admin/rooms/:roomId
+ */
+async function adminCloseRoom(req, res) {
+  try {
+    const { roomId } = req.params;
+
+    if (!roomId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        message: '缺少房间 ID'
+      });
+    }
+
+    const room = RoomModel.getRoomById(parseInt(roomId));
+    if (!room) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: '房间不存在'
+      });
+    }
+
+    if (room.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: 'Already closed',
+        message: '房间已关闭'
+      });
+    }
+
+    RoomModel.closeRoom(parseInt(roomId));
+
+    const adminIdentifier = req.admin.username || req.admin.cidHash || 'admin';
+    logger.info(`✅ 管理员关闭房间: ${room.room_code} (ID: ${roomId}), by ${adminIdentifier}`);
+
+    res.json({
+      success: true,
+      message: '房间已关闭',
+      roomCode: room.room_code
+    });
+
+  } catch (error) {
+    logger.error(`❌ 关闭房间失败: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: '服务器错误'
+    });
+  }
+}
+
 module.exports = {
   login,
   getStats,
@@ -520,5 +658,9 @@ module.exports = {
   updateWhitelist,
   getUsers,
   getAllWhitelist,
-  getLogs
+  getLogs,
+  // 房间管理
+  getAllRooms,
+  getRoomMembers,
+  adminCloseRoom
 };

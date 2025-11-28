@@ -208,6 +208,34 @@ class APIClient {
         return this.get(`/api/admin/logs?limit=${limit}&offset=${offset}${actionParam}`);
     }
 
+    // ==================== 房间管理接口 ====================
+
+    /**
+     * 获取房间列表
+     * @param {string} status - 状态筛选 ('active' | 'closed' | 'all')
+     * @param {number} limit - 数量限制
+     * @param {number} offset - 偏移量
+     */
+    async getRooms(status = 'active', limit = 100, offset = 0) {
+        return this.get(`/api/admin/rooms?status=${status}&limit=${limit}&offset=${offset}`);
+    }
+
+    /**
+     * 获取房间成员详情
+     * @param {number} roomId - 房间ID
+     */
+    async getRoomMembers(roomId) {
+        return this.get(`/api/admin/rooms/${roomId}/members`);
+    }
+
+    /**
+     * 管理员关闭房间
+     * @param {number} roomId - 房间ID
+     */
+    async adminCloseRoom(roomId) {
+        return this.delete(`/api/admin/rooms/${roomId}`);
+    }
+
     // ==================== 健康检查 ====================
 
     /**

@@ -68,6 +68,10 @@
                     <span class="icon">📈</span>
                     <span>活跃度统计</span>
                 </a>
+                <a href="#" data-page="rooms" class="nav-item">
+                    <span class="icon">🚪</span>
+                    <span>房间管理</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <button id="logoutBtn" class="btn btn-secondary">退出登录</button>
@@ -219,7 +223,7 @@
                     </div>
                     <div class="form-group">
                         <label for="lookupWorldId">服务器 ID（可选）</label>
-                        <input type="number" id="lookupWorldId" placeholder="例如：1167">
+                        <select id="lookupWorldId" class="world-select"></select>
                     </div>
                     <div class="form-actions">
                         <button id="lookupSearchBtn" class="btn btn-primary">🔍 查询</button>
@@ -259,7 +263,7 @@
                             <label class="filter-field__label" for="playersWorldId">服务器 ID</label>
                             <div class="filter-input">
                                 <span class="filter-input__icon">🛰️</span>
-                                <input type="number" id="playersWorldId" placeholder="全部服务器">
+                                <select id="playersWorldId" class="world-select"></select>
                             </div>
                             <span class="filter-field__hint">留空表示全部服务器</span>
                         </div>
@@ -385,7 +389,7 @@
                             <label class="filter-field__label" for="activityWorldId">服务器 ID</label>
                             <div class="filter-input">
                                 <span class="filter-input__icon">🛰️</span>
-                                <input type="number" id="activityWorldId" placeholder="全部服务器">
+                                <select id="activityWorldId" class="world-select"></select>
                             </div>
                             <span class="filter-field__hint">留空查看所有服务器</span>
                         </div>
@@ -464,6 +468,74 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 房间管理 -->
+            <div id="roomsContent" class="content-section">
+                <div class="content-header">
+                    <h1>🚪 房间管理</h1>
+                    <div class="filter-group">
+                        <div class="filter-field">
+                            <label class="filter-field__label" for="roomStatusFilter">状态筛选</label>
+                            <div class="filter-input">
+                                <span class="filter-input__icon">🏷️</span>
+                                <select id="roomStatusFilter">
+                                    <option value="active" selected>活跃房间</option>
+                                    <option value="closed">已关闭</option>
+                                    <option value="all">全部房间</option>
+                                </select>
+                            </div>
+                            <span class="filter-field__hint">筛选房间状态</span>
+                        </div>
+                        <div class="filter-field filter-field--button">
+                            <label class="filter-field__label">&nbsp;</label>
+                            <button id="refreshRoomsBtn" class="btn btn-primary btn-sm">🔄 刷新</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 房间统计卡片 -->
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-icon">🏠</div>
+                        <div class="stat-info">
+                            <div class="stat-label">房间数量</div>
+                            <div class="stat-value" id="roomCount">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <div class="stat-label">总在线人数</div>
+                            <div class="stat-value" id="totalOnlineMembers">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 房间列表 -->
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>房间码</th>
+                                <th>房间名称</th>
+                                <th>房主</th>
+                                <th>成员数</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roomsTable">
+                            <tr>
+                                <td colspan="7" class="table-empty">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span id="roomsSummary">共 0 个房间</span>
                     </div>
                 </div>
             </div>
@@ -552,6 +624,74 @@
                 <div class="detail-item">
                     <div class="detail-label">详情</div>
                     <div class="detail-value detail-full" id="modalDetails">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 房间详情模态框 -->
+    <div id="roomDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🚪 房间详情</h2>
+                <button class="modal-close" id="closeRoomModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-item">
+                    <div class="detail-label">房间码</div>
+                    <div class="detail-value" id="modalRoomCode">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">房间名称</div>
+                    <div class="detail-value" id="modalRoomName">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">房主</div>
+                    <div class="detail-value" id="modalRoomHost">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">状态</div>
+                    <div class="detail-value" id="modalRoomStatus">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">创建时间</div>
+                    <div class="detail-value" id="modalRoomCreated">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">过期时间</div>
+                    <div class="detail-value" id="modalRoomExpires">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">公开状态</div>
+                    <div class="detail-value" id="modalRoomPublished">-</div>
+                </div>
+
+                <!-- 成员列表 -->
+                <div class="detail-item">
+                    <div class="detail-label">成员列表</div>
+                </div>
+                <div class="table-container" style="margin-top: 8px;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>角色名</th>
+                                <th>服务器</th>
+                                <th>职业</th>
+                                <th>权限</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalRoomMembers">
+                            <tr>
+                                <td colspan="5" class="table-empty">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="form-actions" style="margin-top: 16px;">
+                    <button class="btn btn-danger" id="modalCloseRoomBtn">🔒 关闭房间</button>
+                    <button class="btn btn-secondary" id="cancelRoomModalBtn">取消</button>
                 </div>
             </div>
         </div>
