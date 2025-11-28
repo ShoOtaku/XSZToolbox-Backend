@@ -14,11 +14,13 @@ class RoomModel {
      * @param {string} [roomData.roomName] - 房间名称
      * @param {number} [roomData.maxMembers=10] - 最大成员数
      * @param {Date} [roomData.expiresAt] - 过期时间
+     * @param {string} [roomData.characterName] - 房主角色名
+     * @param {string} [roomData.worldName] - 房主服务器名
      * @returns {Object} 创建的房间记录
      */
     static createRoom(roomData) {
         const db = getInstance();
-        const { roomCode, hostCidHash, roomName = null, maxMembers = 10, expiresAt } = roomData;
+        const { roomCode, hostCidHash, roomName = null, maxMembers = 10, expiresAt, characterName = null, worldName = null } = roomData;
 
         const stmt = db.prepare(`
             INSERT INTO remote_rooms (room_code, host_cid_hash, room_name, max_members, expires_at)
@@ -31,6 +33,8 @@ class RoomModel {
         this.addMember({
             roomId: result.lastInsertRowid,
             cidHash: hostCidHash,
+            characterName,
+            worldName,
             role: 'Host',
             isConnected: true
         });

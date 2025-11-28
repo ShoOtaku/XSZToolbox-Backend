@@ -21,7 +21,7 @@ class RemoteController {
      */
     async createRoom(req, res) {
         try {
-            const { cidHash, roomName, maxMembers = 10, expiresIn = 86400 } = req.body;
+            const { cidHash, roomName, maxMembers = 10, expiresIn = 86400, characterName, worldName } = req.body;
 
             // 参数验证
             if (!cidHash) {
@@ -70,7 +70,9 @@ class RemoteController {
                 hostCidHash: cidHash,
                 roomName,
                 maxMembers,
-                expiresAt
+                expiresAt,
+                characterName,
+                worldName
             });
 
             res.json({
