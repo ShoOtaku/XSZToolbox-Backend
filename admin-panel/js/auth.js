@@ -82,6 +82,15 @@ class AuthManager {
     }
 
     /**
+     * 获取用户角色
+     */
+    getUserRole() {
+        const payload = this.parseToken();
+        if (!payload) return null;
+        return payload.role || null;
+    }
+
+    /**
      * 登出
      */
     logout() {

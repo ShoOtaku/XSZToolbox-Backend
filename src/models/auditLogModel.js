@@ -108,6 +108,30 @@ class AuditLogModel {
     `).get();
     return result.count;
   }
+
+  /**
+   * 添加审计日志（新版本，支持 operator 和 target）
+   * @param {Object} logData - 日志数据
+   * @param {string} logData.action - 操作类型
+   * @param {string} logData.operator - 操作者用户名
+   * @param {string} logData.target - 目标对象
+   * @param {string} logData.details - 详细信息（JSON 字符串）
+   * @param {string} logData.ip_address - IP 地址
+   */
+  addLog(logData) {
+    const { action, operator, target, details, ip_address } = logData;
+
+    // 兼容旧版表结构，使用 cid_hash 字段存储 operator
+    this.db.prepare(`
+      INSERT INTO audit_logs (cid_hash, action, ip_address, details)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      operator || null,  // 使用 cid_hash 字段存储 operator
+      action,
+      ip_address || null,
+      details || null
+    );
+  }
 }
 
 module.exports = AuditLogModel;

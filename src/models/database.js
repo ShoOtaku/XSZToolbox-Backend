@@ -157,6 +157,71 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_world_statistics_unique_players ON world_statistics(unique_players);
     `);
 
+    // 房间管理相关表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS remote_rooms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_code TEXT UNIQUE NOT NULL,
+        host_cid_hash TEXT NOT NULL,
+        room_name TEXT,
+        max_members INTEGER DEFAULT 10,
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'closed')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        is_published INTEGER DEFAULT 0,
+        published_at DATETIME,
+        publish_expires_at DATETIME
+      );
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS remote_room_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        cid_hash TEXT NOT NULL,
+        character_name TEXT,
+        world_name TEXT,
+        role TEXT DEFAULT 'Member' CHECK(role IN ('Host', 'Leader', 'Member')),
+        job_role TEXT,
+        is_connected INTEGER DEFAULT 1,
+        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_active DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES remote_rooms(id) ON DELETE CASCADE,
+        UNIQUE(room_id, cid_hash)
+      );
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS remote_room_commands (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        target_type TEXT NOT NULL CHECK(target_type IN ('all', 'single')),
+        target_cid_hash TEXT,
+        command_type TEXT NOT NULL,
+        command_params TEXT,
+        status TEXT NOT NULL DEFAULT 'sent' CHECK(status IN ('sent', 'failed')),
+        sent_by TEXT NOT NULL,
+        sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        error TEXT,
+        FOREIGN KEY (room_id) REFERENCES remote_rooms(id) ON DELETE CASCADE
+      );
+    `);
+
+    // 房间管理相关索引
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_remote_rooms_room_code ON remote_rooms(room_code);
+      CREATE INDEX IF NOT EXISTS idx_remote_rooms_host_cid_hash ON remote_rooms(host_cid_hash);
+      CREATE INDEX IF NOT EXISTS idx_remote_rooms_status ON remote_rooms(status);
+      CREATE INDEX IF NOT EXISTS idx_remote_rooms_is_published ON remote_rooms(is_published);
+      
+      CREATE INDEX IF NOT EXISTS idx_remote_room_members_room_id ON remote_room_members(room_id);
+      CREATE INDEX IF NOT EXISTS idx_remote_room_members_cid_hash ON remote_room_members(cid_hash);
+      CREATE INDEX IF NOT EXISTS idx_remote_room_members_role ON remote_room_members(role);
+      
+      CREATE INDEX IF NOT EXISTS idx_room_commands_room_id ON remote_room_commands(room_id);
+      CREATE INDEX IF NOT EXISTS idx_room_commands_sent_at ON remote_room_commands(sent_at DESC);
+    `);
+
     // 数据库迁移：为现有表添加新列（如果不存在）
     this.migrateDatabase();
 

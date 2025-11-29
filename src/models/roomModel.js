@@ -429,6 +429,102 @@ class RoomModel {
 
         return stmt.get().count;
     }
+
+    /**
+     * 创建指令记录
+     * @param {Object} commandData - 指令数据
+     * @param {number} commandData.roomId - 房间ID
+     * @param {string} commandData.targetType - 目标类型 ('all' | 'single')
+     * @param {string} [commandData.targetCidHash] - 目标成员CID哈希（targetType为single时必需）
+     * @param {string} commandData.commandType - 指令类型
+     * @param {Object|string} commandData.commandParams - 指令参数（对象或JSON字符串）
+     * @param {string} commandData.sentBy - 发送者用户名
+     * @param {string} [commandData.status='sent'] - 指令状态 ('sent' | 'failed')
+     * @param {string} [commandData.error] - 错误信息（失败时）
+     * @returns {Object} 插入结果，包含 lastInsertRowid
+     */
+    static createCommand(commandData) {
+        const db = getInstance();
+        const {
+            roomId,
+            targetType,
+            targetCidHash = null,
+            commandType,
+            commandParams,
+            sentBy,
+            status = 'sent',
+            error = null
+        } = commandData;
+
+        // 如果 commandParams 是对象，转换为 JSON 字符串
+        const paramsStr = typeof commandParams === 'string'
+            ? commandParams
+            : JSON.stringify(commandParams);
+
+        const stmt = db.prepare(`
+            INSERT INTO remote_room_commands
+            (room_id, target_type, target_cid_hash, command_type, command_params, status, sent_by, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        return stmt.run(roomId, targetType, targetCidHash, commandType, paramsStr, status, sentBy, error);
+    }
+
+    /**
+     * 获取房间指令历史
+     * @param {number} roomId - 房间ID
+     * @param {number} [limit=10] - 返回数量限制
+     * @returns {Array} 指令历史列表，包含目标成员名称
+     */
+    static getCommandHistory(roomId, limit = 10) {
+        const db = getInstance();
+
+        const stmt = db.prepare(`
+            SELECT
+                c.id,
+                c.room_id,
+                c.target_type,
+                c.target_cid_hash,
+                c.command_type,
+                c.command_params,
+                c.status,
+                c.sent_by,
+                c.sent_at,
+                c.error,
+                CASE
+                    WHEN c.target_type = 'all' THEN '所有成员'
+                    ELSE COALESCE(m.character_name, '未知成员')
+                END as target_name
+            FROM remote_room_commands c
+            LEFT JOIN remote_room_members m
+                ON c.room_id = m.room_id AND c.target_cid_hash = m.cid_hash
+            WHERE c.room_id = ?
+            ORDER BY c.sent_at DESC
+            LIMIT ?
+        `);
+
+        return stmt.all(roomId, limit);
+    }
+
+    /**
+     * 更新指令状态
+     * @param {number} commandId - 指令ID
+     * @param {string} status - 指令状态 ('sent' | 'failed')
+     * @param {string} [error] - 错误信息（失败时）
+     * @returns {Object} 更新结果
+     */
+    static updateCommandStatus(commandId, status, error = null) {
+        const db = getInstance();
+
+        const stmt = db.prepare(`
+            UPDATE remote_room_commands
+            SET status = ?, error = ?
+            WHERE id = ?
+        `);
+
+        return stmt.run(status, error, commandId);
+    }
+
 }
 
 module.exports = RoomModel;

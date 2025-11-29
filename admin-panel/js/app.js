@@ -50,6 +50,8 @@ class App {
         this.currentRoomId = null; // 当前查看的房间ID
         this.logsPagination = { limit: 20, offset: 0, total: 0 };
         this.editingWhitelistHash = null;
+        this.adminUsersCache = []; // 缓存管理员用户列表
+        this.editingUserId = null; // 当前编辑的用户ID
         this.init();
     }
 
@@ -205,6 +207,46 @@ class App {
         });
         document.getElementById('modalCloseRoomBtn')?.addEventListener('click', () => this.handleCloseRoomFromModal());
 
+        // 指令发送功能
+        document.getElementById('commandTarget')?.addEventListener('change', (e) => this.handleCommandTargetChange(e));
+        document.getElementById('sendCommandBtn')?.addEventListener('click', () => this.handleSendCommand());
+
+        // 用户管理
+        document.getElementById('createUserBtn')?.addEventListener('click', () => this.showCreateUserModal());
+        document.getElementById('closeUserModal')?.addEventListener('click', () => this.hideUserModal());
+        document.getElementById('cancelUserBtn')?.addEventListener('click', () => this.hideUserModal());
+        document.getElementById('saveUserBtn')?.addEventListener('click', () => this.handleSaveUser());
+        document.getElementById('deleteUserBtn')?.addEventListener('click', () => this.handleDeleteUser());
+        document.getElementById('userModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'userModal') {
+                this.hideUserModal();
+            }
+        });
+        document.getElementById('userManagementTable')?.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+
+            // 编辑按钮
+            const editBtn = target.closest('.user-edit-btn');
+            if (editBtn) {
+                const userId = parseInt(editBtn.dataset.userId, 10);
+                this.showEditUserModal(userId);
+                return;
+            }
+
+            // 删除按钮
+            const deleteBtn = target.closest('.user-delete-btn');
+            if (deleteBtn) {
+                const userId = parseInt(deleteBtn.dataset.userId, 10);
+                this.handleDeleteUserFromTable(userId);
+                return;
+            }
+        });
+
+        // 账号设置
+        document.getElementById('changeUsernameBtn')?.addEventListener('click', () => this.handleChangeUsername());
+        document.getElementById('changePasswordBtn')?.addEventListener('click', () => this.handleChangePassword());
+
         // 回车登录
         ['username', 'password'].forEach(id => {
             document.getElementById(id)?.addEventListener('keypress', (e) => {
@@ -227,7 +269,64 @@ class App {
     showMainPage() {
         document.getElementById('loginPage').classList.remove('active');
         document.getElementById('mainPage').classList.add('active');
-        this.switchPage('dashboard');
+        
+        // 根据用户角色渲染侧边栏
+        this.renderSidebar();
+        
+        // 根据角色决定默认页面
+        const role = authManager.getUserRole();
+        const defaultPage = role === 'viewer' ? 'rooms' : 'dashboard';
+        this.switchPage(defaultPage);
+    }
+
+    /**
+     * 根据用户角色渲染侧边栏
+     */
+    renderSidebar() {
+        const role = authManager.getUserRole();
+        const sidebar = document.querySelector('.sidebar-nav');
+        
+        if (!sidebar) return;
+        
+        // 定义管理员菜单项
+        const adminMenuItems = [
+            { page: 'dashboard', icon: '📊', label: '仪表盘' },
+            { page: 'whitelist', icon: '✅', label: '白名单管理' },
+            { page: 'users', icon: '👥', label: '用户列表' },
+            { page: 'lookup', icon: '🔍', label: '角色查询' },
+            { page: 'players', icon: '🧙', label: '玩家信息' },
+            { page: 'logs', icon: '📝', label: '审计日志' },
+            { page: 'activity', icon: '📈', label: '活跃度统计' },
+            { page: 'rooms', icon: '🚪', label: '房间管理' },
+            { page: 'user-management', icon: '👤', label: '用户管理' },
+            { page: 'account', icon: '⚙️', label: '账号设置' }
+        ];
+        
+        // 定义普通用户菜单项
+        const viewerMenuItems = [
+            { page: 'rooms', icon: '🚪', label: '房间管理' },
+            { page: 'account', icon: '⚙️', label: '账号设置' }
+        ];
+        
+        // 根据角色选择菜单项
+        const menuItems = role === 'admin' ? adminMenuItems : viewerMenuItems;
+        
+        // 渲染菜单
+        sidebar.innerHTML = menuItems.map(item => `
+            <a href="#" data-page="${item.page}" class="nav-item">
+                <span class="icon">${item.icon}</span>
+                <span>${item.label}</span>
+            </a>
+        `).join('');
+        
+        // 重新绑定导航事件
+        sidebar.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = e.currentTarget.dataset.page;
+                this.switchPage(page);
+            });
+        });
     }
 
     /**
@@ -244,8 +343,11 @@ class App {
             section.classList.remove('active');
         });
 
+        // 将 kebab-case 转换为 camelCase (例如: user-management -> userManagement)
+        const pageId = page.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+        
         // 显示目标内容区域
-        const targetContent = document.getElementById(`${page}Content`);
+        const targetContent = document.getElementById(`${pageId}Content`);
         if (targetContent) {
             targetContent.classList.add('active');
             this.currentPage = page;
@@ -280,6 +382,12 @@ class App {
                 break;
             case 'rooms':
                 this.loadRooms();
+                break;
+            case 'user-management':
+                this.loadUserManagement();
+                break;
+            case 'account':
+                this.loadAccountSettings();
                 break;
         }
     }
@@ -1531,6 +1639,10 @@ class App {
             return;
         }
 
+        // 获取用户角色
+        const userRole = authManager.getUserRole();
+        const isAdmin = userRole === 'admin';
+
         const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
         const formatDateCell = (value) => {
             const formatted = this.formatDate(value);
@@ -1560,10 +1672,13 @@ class App {
                 statusCell = `<span class="table-pill" style="background: rgba(74, 144, 226, 0.12); color: var(--primary-color);">活跃</span>`;
             }
 
-            // 操作按钮：只有活跃房间才能关闭
-            const actionContent = room.status === 'active'
-                ? `<button class="btn btn-danger btn-sm room-close-btn" data-room-id="${room.id}">关闭</button>`
-                : placeholder('-');
+            // 操作按钮：只有管理员且房间活跃时才显示关闭按钮
+            let actionContent;
+            if (isAdmin && room.status === 'active') {
+                actionContent = `<button class="btn btn-danger btn-sm room-close-btn" data-room-id="${room.id}">关闭</button>`;
+            } else {
+                actionContent = placeholder('-');
+            }
 
             return `
             <tr class="table-row--clickable" data-room-index="${index}">
@@ -1628,6 +1743,10 @@ class App {
 
         this.currentRoomId = room.id;
 
+        // 获取用户角色
+        const userRole = authManager.getUserRole();
+        const isAdmin = userRole === 'admin';
+
         // 填充基本信息
         document.getElementById('modalRoomCode').textContent = room.room_code;
         document.getElementById('modalRoomName').textContent = room.room_name || '未命名';
@@ -1641,11 +1760,15 @@ class App {
         document.getElementById('modalRoomPublished').textContent =
             room.is_published ? `是 (至 ${this.formatDate(room.publish_expires_at)})` : '否';
 
-        // 更新关闭按钮状态
+        // 更新关闭按钮状态：只有管理员且房间活跃时才显示
         const closeBtn = document.getElementById('modalCloseRoomBtn');
         if (closeBtn) {
-            closeBtn.disabled = room.status !== 'active';
-            closeBtn.style.display = room.status === 'active' ? '' : 'none';
+            if (isAdmin && room.status === 'active') {
+                closeBtn.disabled = false;
+                closeBtn.style.display = '';
+            } else {
+                closeBtn.style.display = 'none';
+            }
         }
 
         // 显示加载中
@@ -1668,6 +1791,96 @@ class App {
             document.getElementById('modalRoomMembers').innerHTML =
                 `<tr><td colspan="5" class="table-empty">加载失败: ${error.message}</td></tr>`;
         }
+
+        // 加载指令历史
+        this.loadCommandHistory(room.id);
+    }
+
+    /**
+     * 加载指令历史
+     * @param {number} roomId - 房间ID
+     */
+    async loadCommandHistory(roomId) {
+        const historyContainer = document.getElementById('commandHistoryList');
+        if (!historyContainer) return;
+
+        // 显示加载中
+        historyContainer.innerHTML = '<div class="table-empty">加载中...</div>';
+
+        try {
+            const response = await api.getRoomCommandHistory(roomId, 10);
+
+            if (response.success) {
+                this.renderCommandHistory(response.commands || []);
+            } else {
+                historyContainer.innerHTML = '<div class="table-empty">加载指令历史失败</div>';
+            }
+        } catch (error) {
+            console.error('加载指令历史失败:', error);
+            historyContainer.innerHTML = `<div class="table-empty">加载失败: ${error.message}</div>`;
+        }
+    }
+
+    /**
+     * 渲染指令历史列表
+     * @param {Array} commands - 指令列表
+     */
+    renderCommandHistory(commands) {
+        const historyContainer = document.getElementById('commandHistoryList');
+        if (!historyContainer) return;
+
+        if (!commands || commands.length === 0) {
+            historyContainer.innerHTML = '<div class="table-empty">暂无指令历史</div>';
+            return;
+        }
+
+        // 限制显示最近 10 条
+        const displayCommands = commands.slice(0, 10);
+
+        const commandTypeNames = {
+            'move': '移动',
+            'jump': '跳跃',
+            'setpos': '设置位置',
+            'slidetp': '滑步传送',
+            'lockpos': '锁定位置',
+            'chat': '发送聊天',
+            'echo': '回显',
+            'stop': '停止'
+        };
+
+        const html = displayCommands.map(cmd => {
+            const timestamp = this.formatDate(cmd.sent_at);
+            const target = cmd.target_type === 'all' ? '所有成员' : (cmd.target_name || '指定成员');
+            const commandType = commandTypeNames[cmd.command_type] || cmd.command_type;
+            const status = cmd.status === 'sent' ? '已发送' : '失败';
+            const statusClass = cmd.status === 'sent' ? 'success' : 'error';
+
+            let statusBadge = `<span class="table-pill" style="background: rgba(40, 167, 69, 0.15); color: var(--success-color);">${status}</span>`;
+            if (cmd.status === 'failed') {
+                statusBadge = `<span class="table-pill" style="background: rgba(220, 53, 69, 0.15); color: var(--danger-color);">${status}</span>`;
+            }
+
+            let errorInfo = '';
+            if (cmd.status === 'failed' && cmd.error) {
+                errorInfo = `<div style="color: var(--danger-color); font-size: 12px; margin-top: 4px;">错误: ${cmd.error}</div>`;
+            }
+
+            return `
+                <div class="command-history-item" style="padding: 12px; border-bottom: 1px solid rgba(0, 0, 0, 0.1); background: rgba(255, 255, 255, 0.5);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span class="table-meta" style="font-size: 12px;">${timestamp}</span>
+                            <span class="table-pill table-pill--action">${commandType}</span>
+                            ${statusBadge}
+                        </div>
+                        <span class="table-meta" style="font-size: 12px;">目标: ${target}</span>
+                    </div>
+                    ${errorInfo}
+                </div>
+            `;
+        }).join('');
+
+        historyContainer.innerHTML = html;
     }
 
     /**
@@ -1690,6 +1903,10 @@ class App {
             'Member': '成员'
         };
 
+        // 获取用户角色
+        const userRole = authManager.getUserRole();
+        const isAdmin = userRole === 'admin';
+
         const html = members.map(member => {
             const nameCell = member.character_name
                 ? `<span class="table-title">${member.character_name}</span>`
@@ -1697,12 +1914,64 @@ class App {
             const worldCell = member.world_name
                 ? `<span class="table-meta">${member.world_name}</span>`
                 : placeholder('-');
-            const jobRoleCell = member.job_role
-                ? `<span class="table-pill table-pill--id">${member.job_role}</span>`
-                : placeholder('-');
-            const roleCell = member.role
-                ? `<span class="table-meta table-meta--strong">${roleNames[member.role] || member.role}</span>`
-                : placeholder('-');
+            
+            // 职能标识下拉菜单（仅管理员可编辑）
+            let jobRoleCell;
+            if (isAdmin) {
+                const jobRoleOptions = [
+                    { value: '', label: '无' },
+                    { value: 'MT', label: 'MT' },
+                    { value: 'ST', label: 'ST' },
+                    { value: 'H1', label: 'H1' },
+                    { value: 'H2', label: 'H2' },
+                    { value: 'D1', label: 'D1' },
+                    { value: 'D2', label: 'D2' },
+                    { value: 'D3', label: 'D3' },
+                    { value: 'D4', label: 'D4' }
+                ];
+                const currentJobRole = member.job_role || '';
+                const optionsHtml = jobRoleOptions.map(opt => 
+                    `<option value="${opt.value}" ${opt.value === currentJobRole ? 'selected' : ''}>${opt.label}</option>`
+                ).join('');
+                jobRoleCell = `
+                    <select class="job-role-select" 
+                            data-room-id="${this.currentRoomId}" 
+                            data-cid-hash="${member.cid_hash}"
+                            data-original-value="${currentJobRole}">
+                        ${optionsHtml}
+                    </select>
+                `;
+            } else {
+                jobRoleCell = member.job_role
+                    ? `<span class="table-pill table-pill--id">${member.job_role}</span>`
+                    : placeholder('-');
+            }
+
+            // 权限角色下拉菜单（仅管理员可编辑，房主不可修改）
+            let roleCell;
+            const isHost = member.role === 'Host';
+            if (isAdmin && !isHost) {
+                const roleOptions = [
+                    { value: 'Leader', label: '队长' },
+                    { value: 'Member', label: '成员' }
+                ];
+                const currentRole = member.role || 'Member';
+                const roleOptionsHtml = roleOptions.map(opt => 
+                    `<option value="${opt.value}" ${opt.value === currentRole ? 'selected' : ''}>${opt.label}</option>`
+                ).join('');
+                roleCell = `
+                    <select class="permission-role-select" 
+                            data-room-id="${this.currentRoomId}" 
+                            data-cid-hash="${member.cid_hash}"
+                            data-original-value="${currentRole}">
+                        ${roleOptionsHtml}
+                    </select>
+                `;
+            } else {
+                roleCell = member.role
+                    ? `<span class="table-meta table-meta--strong">${roleNames[member.role] || member.role}</span>`
+                    : placeholder('-');
+            }
             const statusCell = member.is_connected
                 ? `<span class="table-pill" style="background: rgba(40, 167, 69, 0.15); color: var(--success-color);">在线</span>`
                 : `<span class="table-pill" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;">离线</span>`;
@@ -1719,6 +1988,273 @@ class App {
         }).join('');
 
         tbody.innerHTML = html;
+
+        // 绑定职能下拉菜单的 change 事件
+        if (isAdmin) {
+            tbody.querySelectorAll('.job-role-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const roomId = e.target.dataset.roomId;
+                    const cidHash = e.target.dataset.cidHash;
+                    const newJobRole = e.target.value || null;
+                    const originalValue = e.target.dataset.originalValue;
+                    this.handleJobRoleChange(roomId, cidHash, newJobRole, originalValue, e.target);
+                });
+            });
+
+            // 绑定权限角色下拉菜单的 change 事件
+            tbody.querySelectorAll('.permission-role-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const roomId = e.target.dataset.roomId;
+                    const cidHash = e.target.dataset.cidHash;
+                    const newRole = e.target.value;
+                    const originalValue = e.target.dataset.originalValue;
+                    this.handlePermissionRoleChange(roomId, cidHash, newRole, originalValue, e.target);
+                });
+            });
+        }
+
+        // 填充指令目标成员下拉菜单
+        this.populateCommandTargetMembers(members);
+    }
+
+    /**
+     * 填充指令目标成员下拉菜单
+     * @param {Array} members - 成员列表
+     */
+    populateCommandTargetMembers(members) {
+        const select = document.getElementById('commandTargetMember');
+        if (!select || !members || members.length === 0) return;
+
+        const options = members.map(member => {
+            const name = member.character_name || '未知';
+            const world = member.world_name ? `@${member.world_name}` : '';
+            return `<option value="${member.cid_hash}">${name}${world}</option>`;
+        }).join('');
+
+        select.innerHTML = options;
+    }
+
+    /**
+     * 处理目标类型变更
+     * @param {Event} event - 变更事件
+     */
+    handleCommandTargetChange(event) {
+        const targetType = event.target.value;
+        const memberGroup = document.getElementById('commandTargetMemberGroup');
+        
+        if (memberGroup) {
+            if (targetType === 'single') {
+                memberGroup.style.display = '';
+            } else {
+                memberGroup.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * 验证指令参数格式
+     * @param {string} params - 参数字符串
+     * @returns {Object} 验证结果 { valid: boolean, error: string, parsed: Object }
+     */
+    validateCommandParams(params) {
+        // 清空错误信息
+        const errorElement = document.getElementById('commandParamsError');
+        if (errorElement) {
+            errorElement.textContent = '';
+        }
+
+        // 如果参数为空，返回空对象
+        if (!params || params.trim() === '') {
+            return { valid: true, error: null, parsed: {} };
+        }
+
+        try {
+            // 尝试解析 JSON
+            const parsed = JSON.parse(params);
+            
+            // 验证解析结果是否为对象
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                return {
+                    valid: false,
+                    error: '参数必须是有效的 JSON 对象',
+                    parsed: null
+                };
+            }
+
+            return { valid: true, error: null, parsed };
+        } catch (error) {
+            return {
+                valid: false,
+                error: `JSON 格式错误: ${error.message}`,
+                parsed: null
+            };
+        }
+    }
+
+    /**
+     * 处理指令发送
+     */
+    async handleSendCommand() {
+        if (!this.currentRoomId) {
+            this.showToast('未选择房间', 'error');
+            return;
+        }
+
+        // 收集表单数据
+        const targetTypeSelect = document.getElementById('commandTarget');
+        const targetMemberSelect = document.getElementById('commandTargetMember');
+        const commandTypeSelect = document.getElementById('commandType');
+        const commandParamsTextarea = document.getElementById('commandParams');
+        const errorElement = document.getElementById('commandParamsError');
+
+        if (!targetTypeSelect || !commandTypeSelect || !commandParamsTextarea) {
+            this.showToast('表单元素未找到', 'error');
+            return;
+        }
+
+        const targetType = targetTypeSelect.value;
+        const commandType = commandTypeSelect.value;
+        const paramsText = commandParamsTextarea.value.trim();
+
+        // 验证目标成员
+        let targetCidHash = null;
+        if (targetType === 'single') {
+            if (!targetMemberSelect || !targetMemberSelect.value) {
+                this.showToast('请选择目标成员', 'error');
+                return;
+            }
+            targetCidHash = targetMemberSelect.value;
+        }
+
+        // 验证指令参数
+        const validation = this.validateCommandParams(paramsText);
+        if (!validation.valid) {
+            if (errorElement) {
+                errorElement.textContent = validation.error;
+            }
+            this.showToast(validation.error, 'error');
+            return;
+        }
+
+        // 构造指令数据
+        const commandData = {
+            targetType: targetType,
+            commandType: commandType,
+            commandParams: validation.parsed
+        };
+
+        if (targetCidHash) {
+            commandData.targetCidHash = targetCidHash;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.sendRoomCommand(this.currentRoomId, commandData);
+
+            if (response.success) {
+                this.showToast('指令发送成功', 'success');
+                // 清空输入框
+                commandParamsTextarea.value = '';
+                if (errorElement) {
+                    errorElement.textContent = '';
+                }
+                // 刷新指令历史
+                if (this.currentRoomId) {
+                    this.loadCommandHistory(this.currentRoomId);
+                }
+            } else {
+                this.showToast(response.message || '指令发送失败', 'error');
+            }
+        } catch (error) {
+            this.showToast(error.message || '指令发送失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 处理职能修改
+     * @param {number} roomId - 房间ID
+     * @param {string} cidHash - 成员CID哈希
+     * @param {string|null} newJobRole - 新职能标识
+     * @param {string} originalValue - 原始值
+     * @param {HTMLSelectElement} selectElement - 下拉菜单元素
+     */
+    async handleJobRoleChange(roomId, cidHash, newJobRole, originalValue, selectElement) {
+        if (!roomId || !cidHash) {
+            this.showToast('参数错误', 'error');
+            return;
+        }
+
+        try {
+            // 禁用下拉菜单，防止重复操作
+            selectElement.disabled = true;
+
+            const response = await api.updateMemberJobRole(roomId, cidHash, newJobRole);
+
+            if (response.success) {
+                this.showToast('职能已更新', 'success');
+                // 更新原始值，以便下次修改时使用
+                selectElement.dataset.originalValue = newJobRole || '';
+            } else {
+                this.showToast(response.message || '更新失败', 'error');
+                // 恢复原值
+                selectElement.value = originalValue;
+            }
+        } catch (error) {
+            this.showToast(error.message || '更新失败', 'error');
+            // 恢复原值
+            selectElement.value = originalValue;
+        } finally {
+            // 重新启用下拉菜单
+            selectElement.disabled = false;
+        }
+    }
+
+    /**
+     * 处理权限修改
+     * @param {number} roomId - 房间ID
+     * @param {string} cidHash - 成员CID哈希
+     * @param {string} newRole - 新权限角色
+     * @param {string} originalValue - 原始值
+     * @param {HTMLSelectElement} selectElement - 下拉菜单元素
+     */
+    async handlePermissionRoleChange(roomId, cidHash, newRole, originalValue, selectElement) {
+        if (!roomId || !cidHash) {
+            this.showToast('参数错误', 'error');
+            return;
+        }
+
+        // 验证不能修改为房主
+        if (newRole === 'Host') {
+            this.showToast('不能将成员设置为房主', 'error');
+            selectElement.value = originalValue;
+            return;
+        }
+
+        try {
+            // 禁用下拉菜单，防止重复操作
+            selectElement.disabled = true;
+
+            const response = await api.updateMemberRole(roomId, cidHash, newRole);
+
+            if (response.success) {
+                this.showToast('权限已更新', 'success');
+                // 更新原始值，以便下次修改时使用
+                selectElement.dataset.originalValue = newRole;
+            } else {
+                this.showToast(response.message || '更新失败', 'error');
+                // 恢复原值
+                selectElement.value = originalValue;
+            }
+        } catch (error) {
+            this.showToast(error.message || '更新失败', 'error');
+            // 恢复原值
+            selectElement.value = originalValue;
+        } finally {
+            // 重新启用下拉菜单
+            selectElement.disabled = false;
+        }
     }
 
     /**
@@ -1737,6 +2273,501 @@ class App {
         const roomId = this.currentRoomId;
         this.closeRoomDetailModal();
         await this.handleAdminCloseRoom(roomId);
+    }
+
+    // ==================== 用户管理 ====================
+
+    /**
+     * 加载用户管理页面
+     */
+    async loadUserManagement() {
+        try {
+            this.showLoading(true);
+            const response = await api.getUserList({ limit: 100, offset: 0 });
+
+            if (response.success) {
+                this.adminUsersCache = response.users || [];
+                this.renderUserManagementTable(this.adminUsersCache);
+            } else {
+                this.showToast(response.message || '加载用户列表失败', 'error');
+            }
+        } catch (error) {
+            this.showToast(error.message || '加载用户列表失败', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 渲染用户管理表格
+     */
+    renderUserManagementTable(users) {
+        const tbody = document.getElementById('userManagementTable');
+        if (!tbody) return;
+
+        if (!users || users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="table-empty">暂无用户</td></tr>';
+            return;
+        }
+
+        const placeholder = (text = '-') => `<span class="table-placeholder">${text}</span>`;
+        const formatDateCell = (value) => {
+            const formatted = this.formatDate(value);
+            return formatted === '-' ? placeholder('-') : `<span class="table-meta">${formatted}</span>`;
+        };
+
+        // 获取当前登录用户的ID（从 Token 中解析）
+        const token = authManager.getToken();
+        let currentUserId = null;
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                currentUserId = payload.id || payload.userId;
+            } catch (error) {
+                console.error('解析 Token 失败:', error);
+            }
+        }
+
+        const roleNames = {
+            'admin': '管理员',
+            'viewer': '普通用户'
+        };
+
+        const html = users.map(user => {
+            const usernameCell = `<span class="table-title">${user.username}</span>`;
+            const roleCell = user.role
+                ? `<span class="table-pill ${user.role === 'admin' ? 'table-pill--action' : ''}">${roleNames[user.role] || user.role}</span>`
+                : placeholder('-');
+            const loginCountCell = `<span class="table-metric">${user.login_count || 0}</span>`;
+
+            // 判断是否是当前用户
+            const isCurrentUser = currentUserId && user.id === currentUserId;
+
+            // 操作按钮：不能删除自己
+            const actionContent = isCurrentUser
+                ? `<span class="table-placeholder">当前用户</span>`
+                : `<button class="btn btn-primary btn-sm user-edit-btn" data-user-id="${user.id}">编辑</button>
+                   <button class="btn btn-danger btn-sm user-delete-btn" data-user-id="${user.id}">删除</button>`;
+
+            return `
+            <tr>
+                <td>${usernameCell}</td>
+                <td>${roleCell}</td>
+                <td>${formatDateCell(user.last_login)}</td>
+                <td class="table-cell--metric">${loginCountCell}</td>
+                <td>${formatDateCell(user.created_at)}</td>
+                <td class="table-actions">${actionContent}</td>
+            </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = html;
+    }
+
+    /**
+     * 显示创建用户模态框
+     */
+    showCreateUserModal() {
+        this.editingUserId = null;
+
+        // 设置标题
+        document.getElementById('userModalTitle').textContent = '创建用户';
+
+        // 清空表单
+        document.getElementById('modalUsername').value = '';
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalRole').value = 'viewer';
+
+        // 清空错误提示
+        document.getElementById('modalUsernameError').textContent = '';
+        document.getElementById('modalPasswordError').textContent = '';
+
+        // 隐藏删除按钮
+        document.getElementById('deleteUserBtn').style.display = 'none';
+
+        // 显示模态框
+        document.getElementById('userModal').classList.add('active');
+    }
+
+    /**
+     * 显示编辑用户模态框
+     */
+    showEditUserModal(userId) {
+        const user = this.adminUsersCache.find(u => u.id === userId);
+        if (!user) {
+            this.showToast('用户不存在', 'error');
+            return;
+        }
+
+        this.editingUserId = userId;
+
+        // 设置标题
+        document.getElementById('userModalTitle').textContent = '编辑用户';
+
+        // 填充表单
+        document.getElementById('modalUsername').value = user.username;
+        document.getElementById('modalPassword').value = ''; // 密码留空
+        document.getElementById('modalRole').value = user.role || 'viewer';
+
+        // 清空错误提示
+        document.getElementById('modalUsernameError').textContent = '';
+        document.getElementById('modalPasswordError').textContent = '';
+
+        // 显示删除按钮
+        document.getElementById('deleteUserBtn').style.display = 'inline-block';
+
+        // 显示模态框
+        document.getElementById('userModal').classList.add('active');
+    }
+
+    /**
+     * 隐藏用户模态框
+     */
+    hideUserModal() {
+        document.getElementById('userModal').classList.remove('active');
+        this.editingUserId = null;
+
+        // 清空表单
+        document.getElementById('modalUsername').value = '';
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalRole').value = 'viewer';
+
+        // 清空错误提示
+        document.getElementById('modalUsernameError').textContent = '';
+        document.getElementById('modalPasswordError').textContent = '';
+    }
+
+    /**
+     * 处理保存用户（创建或更新）
+     */
+    async handleSaveUser() {
+        // 清空错误提示
+        document.getElementById('modalUsernameError').textContent = '';
+        document.getElementById('modalPasswordError').textContent = '';
+
+        const username = document.getElementById('modalUsername').value.trim();
+        const password = document.getElementById('modalPassword').value.trim();
+        const role = document.getElementById('modalRole').value;
+
+        // 验证输入
+        let hasError = false;
+
+        if (!username) {
+            document.getElementById('modalUsernameError').textContent = '请输入用户名';
+            hasError = true;
+        }
+
+        // 创建模式下密码必填
+        if (!this.editingUserId && !password) {
+            document.getElementById('modalPasswordError').textContent = '请输入密码';
+            hasError = true;
+        }
+
+        // 如果填写了密码，验证长度
+        if (password && password.length < 8) {
+            document.getElementById('modalPasswordError').textContent = '密码长度至少 8 个字符';
+            hasError = true;
+        }
+
+        if (hasError) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+
+            if (this.editingUserId) {
+                // 更新用户
+                const updates = { username, role };
+                if (password) {
+                    updates.password = password;
+                }
+
+                const response = await api.updateUser(this.editingUserId, updates);
+
+                if (response.success) {
+                    this.showToast('用户信息已更新', 'success');
+                    this.hideUserModal();
+                    this.loadUserManagement();
+                } else {
+                    this.showToast(response.message || '更新失败', 'error');
+                }
+            } else {
+                // 创建用户
+                const response = await api.createUser(username, password, role);
+
+                if (response.success) {
+                    this.showToast('用户创建成功', 'success');
+                    this.hideUserModal();
+                    this.loadUserManagement();
+                } else {
+                    this.showToast(response.message || '创建失败', 'error');
+                }
+            }
+        } catch (error) {
+            if (error.status === 409) {
+                document.getElementById('modalUsernameError').textContent = '用户名已存在';
+            } else if (error.status === 400) {
+                this.showToast(error.message || '输入数据无效', 'error');
+            } else {
+                this.showToast(error.message || '操作失败', 'error');
+            }
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 处理删除用户（从模态框）
+     */
+    async handleDeleteUser() {
+        if (!this.editingUserId) {
+            this.showToast('请选择要删除的用户', 'error');
+            return;
+        }
+
+        const user = this.adminUsersCache.find(u => u.id === this.editingUserId);
+        const confirmMsg = user
+            ? `确定要删除用户 "${user.username}" 吗？\n\n此操作不可恢复！`
+            : `确定要删除该用户吗？\n\n此操作不可恢复！`;
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.deleteUser(this.editingUserId);
+
+            if (response.success) {
+                this.showToast('用户已删除', 'success');
+                this.hideUserModal();
+                this.loadUserManagement();
+            } else {
+                this.showToast(response.message || '删除失败', 'error');
+            }
+        } catch (error) {
+            if (error.status === 403) {
+                this.showToast('不能删除自己的账号', 'error');
+            } else {
+                this.showToast(error.message || '删除失败', 'error');
+            }
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 处理从表格删除用户
+     */
+    async handleDeleteUserFromTable(userId) {
+        const user = this.adminUsersCache.find(u => u.id === userId);
+        const confirmMsg = user
+            ? `确定要删除用户 "${user.username}" 吗？\n\n此操作不可恢复！`
+            : `确定要删除该用户吗？\n\n此操作不可恢复！`;
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.deleteUser(userId);
+
+            if (response.success) {
+                this.showToast('用户已删除', 'success');
+                this.loadUserManagement();
+            } else {
+                this.showToast(response.message || '删除失败', 'error');
+            }
+        } catch (error) {
+            if (error.status === 403) {
+                this.showToast('不能删除自己的账号', 'error');
+            } else {
+                this.showToast(error.message || '删除失败', 'error');
+            }
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    // ==================== 账号设置 ====================
+
+    /**
+     * 加载账号设置页面
+     */
+    loadAccountSettings() {
+        // 从 JWT Token 中获取当前用户名
+        const token = authManager.getToken();
+        if (!token) {
+            this.showToast('未登录', 'error');
+            return;
+        }
+
+        try {
+            // 解析 JWT Token（简单解析，不验证签名）
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const username = payload.username || '未知';
+
+            // 填充当前用户名
+            const currentUsernameInput = document.getElementById('currentUsername');
+            if (currentUsernameInput) {
+                currentUsernameInput.value = username;
+            }
+
+            // 清空所有输入框和错误提示
+            this.clearAccountSettingsForm();
+        } catch (error) {
+            console.error('解析 Token 失败:', error);
+            this.showToast('获取用户信息失败', 'error');
+        }
+    }
+
+    /**
+     * 清空账号设置表单
+     */
+    clearAccountSettingsForm() {
+        // 清空修改用户名表单
+        document.getElementById('newUsername').value = '';
+        document.getElementById('usernamePassword').value = '';
+        document.getElementById('newUsernameError').textContent = '';
+        document.getElementById('usernamePasswordError').textContent = '';
+
+        // 清空修改密码表单
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+        document.getElementById('currentPasswordError').textContent = '';
+        document.getElementById('newPasswordError').textContent = '';
+        document.getElementById('confirmPasswordError').textContent = '';
+    }
+
+    /**
+     * 处理修改用户名
+     */
+    async handleChangeUsername() {
+        // 清空错误提示
+        document.getElementById('newUsernameError').textContent = '';
+        document.getElementById('usernamePasswordError').textContent = '';
+
+        const newUsername = document.getElementById('newUsername').value.trim();
+        const password = document.getElementById('usernamePassword').value.trim();
+
+        // 验证输入
+        if (!newUsername) {
+            document.getElementById('newUsernameError').textContent = '请输入新用户名';
+            return;
+        }
+
+        if (!password) {
+            document.getElementById('usernamePasswordError').textContent = '请输入当前密码';
+            return;
+        }
+
+        // 确认操作
+        if (!confirm(`确定要将用户名修改为 "${newUsername}" 吗？\n\n修改后需要重新登录。`)) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.changeUsername(newUsername, password);
+
+            if (response.success) {
+                this.showToast('用户名修改成功！请重新登录', 'success');
+                
+                // 延迟 2 秒后自动登出
+                setTimeout(() => {
+                    authManager.logout();
+                }, 2000);
+            } else {
+                this.showToast(response.message || '修改失败', 'error');
+            }
+        } catch (error) {
+            if (error.status === 401) {
+                document.getElementById('usernamePasswordError').textContent = '密码错误';
+            } else if (error.status === 409) {
+                document.getElementById('newUsernameError').textContent = '用户名已存在';
+            } else {
+                this.showToast(error.message || '修改失败', 'error');
+            }
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * 处理修改密码
+     */
+    async handleChangePassword() {
+        // 清空错误提示
+        document.getElementById('currentPasswordError').textContent = '';
+        document.getElementById('newPasswordError').textContent = '';
+        document.getElementById('confirmPasswordError').textContent = '';
+
+        const currentPassword = document.getElementById('currentPassword').value.trim();
+        const newPassword = document.getElementById('newPassword').value.trim();
+        const confirmPassword = document.getElementById('confirmPassword').value.trim();
+
+        // 验证输入
+        let hasError = false;
+
+        if (!currentPassword) {
+            document.getElementById('currentPasswordError').textContent = '请输入当前密码';
+            hasError = true;
+        }
+
+        if (!newPassword) {
+            document.getElementById('newPasswordError').textContent = '请输入新密码';
+            hasError = true;
+        } else if (newPassword.length < 8) {
+            document.getElementById('newPasswordError').textContent = '密码长度至少 8 个字符';
+            hasError = true;
+        }
+
+        if (!confirmPassword) {
+            document.getElementById('confirmPasswordError').textContent = '请确认新密码';
+            hasError = true;
+        } else if (newPassword !== confirmPassword) {
+            document.getElementById('confirmPasswordError').textContent = '两次输入的密码不一致';
+            hasError = true;
+        }
+
+        if (hasError) {
+            return;
+        }
+
+        // 确认操作
+        if (!confirm('确定要修改密码吗？\n\n修改后需要重新登录。')) {
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            const response = await api.changePassword(currentPassword, newPassword);
+
+            if (response.success) {
+                this.showToast('密码修改成功！请重新登录', 'success');
+                
+                // 延迟 2 秒后自动登出
+                setTimeout(() => {
+                    authManager.logout();
+                }, 2000);
+            } else {
+                this.showToast(response.message || '修改失败', 'error');
+            }
+        } catch (error) {
+            if (error.status === 401) {
+                document.getElementById('currentPasswordError').textContent = '当前密码错误';
+            } else if (error.status === 400) {
+                // 可能是密码强度不足
+                document.getElementById('newPasswordError').textContent = error.message || '密码不符合要求';
+            } else {
+                this.showToast(error.message || '修改失败', 'error');
+            }
+        } finally {
+            this.showLoading(false);
+        }
     }
 }
 

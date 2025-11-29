@@ -229,7 +229,6 @@ class RemoteController {
                 createdAt: room.created_at,
                 expiresAt: room.expires_at,
                 members: members.map(m => ({
-                    cidHash: m.cid_hash,
                     characterName: m.character_name,
                     worldName: m.world_name,
                     role: m.role,

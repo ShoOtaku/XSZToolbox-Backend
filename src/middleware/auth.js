@@ -75,7 +75,7 @@ function verifyToken(req, res, next) {
     req.admin = {
       username: decoded.username || null,
       cidHash: decoded.cidHash || null,
-      role: decoded.role
+      role: decoded.role || admin.role || 'admin'
     };
 
     next();
@@ -127,7 +127,45 @@ function generateToken(identifier, role = 'admin', isUsername = true) {
   return jwt.sign(payload, secret, { expiresIn });
 }
 
+/**
+ * 基于角色的访问控制中间件
+ * @param {string|string[]} allowedRoles - 允许的角色（单个角色或角色数组）
+ * @returns {Function} Express 中间件函数
+ */
+function requireRole(allowedRoles) {
+  return (req, res, next) => {
+    // 确保用户已通过 verifyToken 中间件认证
+    if (!req.admin || !req.admin.role) {
+      logger.warn(`❌ 权限检查失败: 未找到用户信息 - ${req.method} ${req.originalUrl}`);
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: '未认证'
+      });
+    }
+
+    const userRole = req.admin.role;
+    
+    // 将单个角色转换为数组
+    const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    
+    // 检查用户角色是否在允许列表中
+    if (!roles.includes(userRole)) {
+      logger.warn(`❌ 权限不足: ${req.admin.username || req.admin.cidHash} (${userRole}) 尝试访问 ${req.originalUrl}`);
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: '权限不足'
+      });
+    }
+    
+    // 权限验证通过，继续处理请求
+    next();
+  };
+}
+
 module.exports = {
   verifyToken,
-  generateToken
+  generateToken,
+  requireRole
 };

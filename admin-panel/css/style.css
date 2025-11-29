@@ -905,6 +905,24 @@ body {
     animation: slideDown 0.3s;
 }
 
+/* 宽模态框样式 */
+.modal--wide .modal-content {
+    max-width: 900px;
+    min-width: 900px;
+}
+
+.modal-content--wide {
+    max-width: 900px;
+    min-width: 900px;
+}
+
+/* 成员列表容器样式 - 添加滚动 */
+.modal-content--wide .table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -1051,6 +1069,19 @@ body {
         width: 100%;
         padding: 24px 20px;
     }
+
+    /* 宽模态框在中等屏幕上的响应式调整 */
+    .modal--wide .modal-content,
+    .modal-content--wide {
+        max-width: 90%;
+        min-width: auto;
+        width: 90%;
+    }
+
+    /* 指令发送区域在中等屏幕上的调整 */
+    .command-target-group {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
@@ -1088,6 +1119,29 @@ body {
     .filter-field--button .btn {
         margin-top: 12px;
     }
+
+    /* 宽模态框在小屏幕上的响应式调整 */
+    .modal--wide .modal-content,
+    .modal-content--wide {
+        max-width: 95%;
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .modal-content--wide .table-container {
+        max-height: 300px;
+    }
+
+    /* 指令发送和历史区域在小屏幕上的调整 */
+    .command-section,
+    .command-history-section {
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .command-history-list {
+        max-height: 300px;
+    }
 }
 
 @media (max-width: 576px) {
@@ -1120,4 +1174,534 @@ body {
     .pagination-info {
         width: 100%;
     }
+
+    /* 宽模态框在超小屏幕上的响应式调整 */
+    .modal--wide .modal-content,
+    .modal-content--wide {
+        max-width: 100%;
+        width: 100%;
+        max-height: 95vh;
+        border-radius: 0;
+    }
+
+    .modal-header {
+        padding: 16px;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+
+    .modal-content--wide .table-container {
+        max-height: 250px;
+        padding: 12px;
+    }
+
+    /* 表格在超小屏幕上的调整 */
+    .data-table {
+        font-size: 12px;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 12px 10px;
+    }
+
+    /* 指令区域在超小屏幕上的调整 */
+    .command-section,
+    .command-history-section {
+        padding: 12px;
+        margin-top: 12px;
+        border-radius: 8px;
+    }
+
+    .command-section h3,
+    .command-history-section h3 {
+        font-size: 16px;
+    }
+
+    .command-history-list {
+        max-height: 250px;
+    }
+
+    .command-history-item {
+        padding: 10px 12px;
+    }
+
+    /* 下拉菜单在超小屏幕上的调整 */
+    .data-table td .job-role-select,
+    .data-table td .permission-role-select {
+        font-size: 12px;
+        padding: 4px 6px;
+        max-width: 100px;
+    }
+}
+
+/* ==================== 成员列表可编辑下拉菜单 ==================== */
+.job-role-select,
+.permission-role-select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: white;
+    background-image: linear-gradient(to bottom, white, #f8f9fa);
+    font-size: 13px;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+    padding-right: 28px;
+}
+
+/* 添加自定义下拉箭头 */
+.job-role-select {
+    background-image: 
+        linear-gradient(to bottom, white, #f8f9fa),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234a90e2' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+}
+
+.permission-role-select {
+    background-image: 
+        linear-gradient(to bottom, white, #f8f9fa),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234a90e2' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+}
+
+.job-role-select:hover,
+.permission-role-select:hover {
+    border-color: var(--primary-color);
+    background-image: 
+        linear-gradient(to bottom, #f8f9fa, white),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23357abd' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(74, 144, 226, 0.15);
+}
+
+.job-role-select:focus,
+.permission-role-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+    background-image: 
+        linear-gradient(to bottom, white, #f8f9fa),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23357abd' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+}
+
+.job-role-select:active,
+.permission-role-select:active {
+    transform: translateY(0);
+}
+
+.job-role-select:disabled,
+.permission-role-select:disabled {
+    background-color: var(--light-bg);
+    background-image: 
+        linear-gradient(to bottom, var(--light-bg), #e9ecef),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c757d' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    cursor: not-allowed;
+    opacity: 0.6;
+    border-color: #ced4da;
+}
+
+/* 表格内的下拉菜单样式优化 */
+.data-table td .job-role-select,
+.data-table td .permission-role-select {
+    max-width: 120px;
+    min-width: 100px;
+    font-weight: 500;
+}
+
+/* 下拉菜单选项样式 */
+.job-role-select option,
+.permission-role-select option {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-color);
+    background-color: white;
+}
+
+.job-role-select option:hover,
+.permission-role-select option:hover {
+    background-color: var(--light-bg);
+}
+
+/* 职能标识特殊样式 */
+.job-role-select option[value="MT"],
+.job-role-select option[value="ST"] {
+    color: #0066cc;
+    font-weight: 600;
+}
+
+.job-role-select option[value="H1"],
+.job-role-select option[value="H2"] {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.job-role-select option[value^="D"] {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* 权限角色特殊样式 */
+.permission-role-select option[value="Host"] {
+    color: #ffc107;
+    font-weight: 700;
+}
+
+.permission-role-select option[value="Leader"] {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.permission-role-select option[value="Member"] {
+    color: var(--text-muted);
+}
+
+/* 表格行内对齐 */
+.data-table td {
+    vertical-align: middle;
+}
+
+.data-table td .job-role-select,
+.data-table td .permission-role-select {
+    margin: 0 auto;
+}
+
+/* ==================== 指令发送区域样式 ==================== */
+.command-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 24px;
+    border: 1px solid rgba(74, 144, 226, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.command-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.command-section h3::before {
+    content: '📤';
+    font-size: 20px;
+}
+
+.command-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.command-form .form-group {
+    margin-bottom: 0;
+}
+
+.command-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.command-form input,
+.command-form select,
+.command-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--text-color);
+    background-color: white;
+    transition: all 0.3s ease;
+}
+
+.command-form input:focus,
+.command-form select:focus,
+.command-form textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.command-form textarea {
+    font-family: 'Courier New', Consolas, monospace;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.command-form textarea::placeholder {
+    font-family: 'Courier New', Consolas, monospace;
+    color: var(--text-muted);
+}
+
+.command-target-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.command-target-member {
+    display: none;
+}
+
+.command-target-member.active {
+    display: block;
+}
+
+.command-form .btn {
+    margin-top: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.command-form .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+}
+
+.command-form .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(74, 144, 226, 0.4);
+}
+
+.command-form .btn-primary:active {
+    transform: translateY(0);
+}
+
+/* 指令类型图标 */
+.command-type-icon {
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 14px;
+}
+
+/* ==================== 指令历史区域样式 ==================== */
+.command-history-section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 24px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.command-history-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.command-history-section h3::before {
+    content: '📜';
+    font-size: 20px;
+}
+
+.command-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* 自定义滚动条 */
+.command-history-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.command-history-list::-webkit-scrollbar-track {
+    background: var(--light-bg);
+    border-radius: 4px;
+}
+
+.command-history-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+.command-history-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+.command-history-item {
+    background: var(--light-bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--border-color);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.command-history-item:hover {
+    background: #f0f2f5;
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.command-history-item.status-sent {
+    border-left-color: var(--success-color);
+}
+
+.command-history-item.status-failed {
+    border-left-color: var(--danger-color);
+}
+
+.command-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.command-history-time {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.command-history-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.command-history-status.status-sent {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--success-color);
+}
+
+.command-history-status.status-sent::before {
+    content: '✓';
+    font-size: 14px;
+}
+
+.command-history-status.status-failed {
+    background: rgba(220, 53, 69, 0.15);
+    color: var(--danger-color);
+}
+
+.command-history-status.status-failed::before {
+    content: '✗';
+    font-size: 14px;
+}
+
+.command-history-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.command-history-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.command-history-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.command-history-value {
+    font-size: 13px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.command-history-target {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(74, 144, 226, 0.1);
+    border-radius: 6px;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.command-history-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(108, 117, 125, 0.1);
+    border-radius: 6px;
+    color: var(--secondary-color);
+    font-weight: 600;
+    font-family: 'Courier New', Consolas, monospace;
+}
+
+.command-history-error {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(220, 53, 69, 0.08);
+    border-radius: 6px;
+    border-left: 3px solid var(--danger-color);
+}
+
+.command-history-error-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--danger-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.command-history-error-message {
+    font-size: 13px;
+    color: #721c24;
+    line-height: 1.5;
+}
+
+.command-history-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.command-history-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.command-history-empty-text {
+    font-size: 14px;
+    color: var(--text-muted);
 }
